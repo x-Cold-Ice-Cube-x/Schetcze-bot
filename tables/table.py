@@ -1,4 +1,5 @@
 # --------- Импорты встроенных библиотек --------- #
+from logging import getLogger
 from abc import ABC, abstractmethod
 from sqlite3 import connect
 # ------------------------------------------------ #
@@ -13,17 +14,17 @@ from configs.text import Text
 
 
 class Table(ABC):
-    # ---------- Поля класса Table ---------- #
+    # ---------- Поля и свойства класса Table ---------- #
     _connection = connect(database=Text.databaseFilepath)  # тип: sqlite3.Connection (обеспечить единственность объекта)
     _cursor = _connection.cursor()  # тип: sqlite3.Cursor (обеспечить единственность объекта)
-    __tableName = None  # тип: str (ненаследуемое поле, обеспечить создание аналога в классе наследнике)
-    __searchColumn = None  # тип: str (ненаследуемое поле, обеспечить создание аналога в классе наследнике)
-
-    # --------------------------------------- #
+    _logger = getLogger("botLogger")
+    __tableName = None  # будущий тип: str (обеспечить сокрытие свойства в классе наследнике)
+    __searchColumn = None  # будущий тип: str (обеспечить сокрытие свойства в классе наследнике)
+    # -------------------------------------------------- #
 
     # ---------- Абстрактные методы Table ---------- #
     @abstractmethod
-    def fillingTheTable(self) -> None:
+    def fillingTheTable(self, **kwargs) -> None:
         """
         Абстрактный метод Table: заполнение таблицы (логирование по необходимости)
         :return: NoneType
@@ -77,6 +78,7 @@ class Table(ABC):
         # Преобразование sqlite3.Cursor в pandas.DataFrame ↓
         sqlQuery = read_sql_query(f"SELECT * FROM {self.__tableName}", self._connection)
         sqlQuery.to_excel(filepath, index=False)  # сохранение преобразованной информации в xlsx базу данных
+
     # ----------------------------------------------------- #
 
     # ---------- Методы обновления данных в таблице --------- #
@@ -109,4 +111,23 @@ class Table(ABC):
         # Удаление строки из таблицы ↓
         self._cursor.execute(f"DELETE * FROM {self.__tableName} WHERE {self.__searchColumn} = '{lineData}'")
         self._connection.commit()  # сохранение изменений
+
     # ------------------------------------------------------ #
+
+    # ---------- Геттеры класса Table ---------- #
+    @classmethod
+    def getTableName(cls):
+        """
+        Геттер свойства tableName
+        :return: __tableName
+        """
+        return cls.__tableName
+
+    @classmethod
+    def getSearchColumn(cls):
+        """
+        Геттер свойства searchColumn
+        :return: __searchColumn
+        """
+        return cls.__searchColumn
+    # ----------------------------------------- #
