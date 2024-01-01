@@ -3,3 +3,7 @@ class Text:
     databaseFilepath = f"databases/bot_database.sqlite"  # относительный путь к Sqlite базе
     logsFilepath = f"databases/logs.log"  # относительный путь к логам
     # ---------------------------------- #
+
+    # ---------- Протокольные сообщения ---------- #
+    fillingTheTableAuthorization = ("Таблица {} успешно обновлена. Старые данные удалены. Новые данные:"
+                                    "{}: {}, {}: {}")
