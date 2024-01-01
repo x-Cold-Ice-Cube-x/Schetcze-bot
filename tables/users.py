@@ -16,9 +16,15 @@ class Users(Table):
     PHONE_NUMBER = "Phone_number"
     CONTRIBUTION = "Contribution"
     RESPONSES = "Responses"
-    __tableName = "Users"
-    __searchColumn = TELEGRAM_ID
     # --------------------------------------------------------- #
+
+    def __init__(self):
+        """
+        Конструктор класса Users: выполнение конструктора класса-родителя
+        """
+
+        # Определение необходимых полей, для корректной работы методов экспорта и импорта ↓
+        super().__init__("Users", self.TELEGRAM_ID)
 
     def fillingTheTable(self, telegramID: int, telegramUsername: str | None) -> None:
         """
@@ -28,10 +34,10 @@ class Users(Table):
         :return: NoneType
         """
         # Добавление нового пользователя в базу данных ↓
-        self._cursor.execute(f"INSERT INTO {self.__tableName} VALUES (?,?,?,?,?,?)",
+        self._cursor.execute(f"INSERT INTO {self._tableName} VALUES (?,?,?,?,?,?)",
                              (telegramID, telegramUsername, None, None, 0, dumps([])))
         self._connection.commit()  # сохранение изменений
 
         # Логирование ↓
-        self._logger.info(Text.fillingTheTableUsers.format(self.__tableName, self.TELEGRAM_ID, telegramID,
+        self._logger.info(Text.fillingTheTableUsers.format(self._tableName, self.TELEGRAM_ID, telegramID,
                                                            self.TELEGRAM_USERNAME, telegramUsername))
