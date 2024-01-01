@@ -10,10 +10,16 @@ class Authorization(Table):
     PAYMENT_TOKEN = "Payment_token"
     __tableName = "Authorization"
     __searchColumn = TELEGRAM_TOKEN
-
     # --------------------------------------------------------- #
 
+    # ---------- Переопределенные методы Table ---------- #
     def fillingTheTable(self, telegramToken: str, paymentToken: str) -> None:
+        """
+        Переопределенный метод Table, заполняющий таблицу Authorization
+        :param telegramToken: Авторизационный токен бота Telegram
+        :param paymentToken: Авторизационный токен оплаты бота
+        :return: NoneType
+        """
         # Удаление всех исходных данных из таблицы ↓
         self._cursor.execute(f"DELETE * FROM {self.__tableName}")
 
@@ -24,11 +30,22 @@ class Authorization(Table):
         # Логирование ↓
         self._logger.warning(Text.fillingTheTableAuthorization.format(self.__tableName, self.TELEGRAM_TOKEN,
                                                                       telegramToken, self.PAYMENT_TOKEN, paymentToken))
+    # --------------------------------------------------- #
 
+    # ---------- Методы импорта данных из таблицы Authorization ---------- #
     def getTelegramToken(self) -> str:
+        """
+        Метод, возвращающий Telegram токен бота
+        :return: telegramToken
+        """
         # Возвращение телеграмм-токена из таблицы ↓
         return str(self.getDataFromColumn(columnName=self.TELEGRAM_TOKEN)[0])
 
     def getPaymentToken(self) -> str:
+        """
+        Метод, возвращающий токен оплаты бота
+        :return: paymentToken
+        """
         # Возвращение токена оплаты из таблицы ↓
         return str(self.getDataFromColumn(columnName=self.PAYMENT_TOKEN)[0])
+    # --------------------------------------------------------------------- #
