@@ -9,3 +9,13 @@ class Text:
                                     "{}: {}, {}: {}")
     fillingTheTableUsers = ("Таблица {} успешно обновлена. Заполнены данные о новом пользователе: "
                             "{}: {}, {}: {}")
+
+    loggerConnected = "Логгер успешно импортирован. "
+    authorizationConnected = "Класс Authorization успешно импортирован. Таблица Authorization подключена."
+    usersConnected = "Класс Users успешно импортирован. Таблица Users подключена."
+    tokenVerificationPassed = "Телеграмм токен действителен. Выполняется запуск поллинга..."
+    tokenVerificationError = ("Телеграмм токен недействителен. "
+                              "Заполните таблицу Authorization заново и повторите попытку."
+                              "Бот деактивирован.")
+    pollingStarted = "Поллинг бота успешно запущен"
+

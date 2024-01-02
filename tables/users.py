@@ -26,6 +26,9 @@ class Users(Table):
         # Определение необходимых полей, для корректной работы методов экспорта и импорта ↓
         super().__init__("Users", self.TELEGRAM_ID)
 
+        # Логирование ↓
+        self._logger.info(Text.usersConnected)
+
     def fillingTheTable(self, telegramID: int, telegramUsername: str | None) -> None:
         """
         Переопределенный метод Table, заполняющий таблицу Users

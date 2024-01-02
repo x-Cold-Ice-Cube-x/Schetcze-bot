@@ -18,6 +18,9 @@ class Authorization(Table):
         # Определение необходимых полей, для корректной работы методов экспорта и импорта ↓
         super().__init__("Authorization", self.TELEGRAM_TOKEN)
 
+        # Логирование ↓
+        self._logger.info(Text.authorizationConnected)
+
     # ---------- Переопределенные методы Table ---------- #
     def fillingTheTable(self, telegramToken: str, paymentToken: str) -> None:
         """
