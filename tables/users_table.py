@@ -8,7 +8,7 @@ from configs.text import Text
 # ---------------------------------------- #
 
 
-class Users(Table):
+class UsersTable(Table):
     # ---------- Поля и свойства класса Authorization --------- #
     TELEGRAM_ID = "Telegram_ID"
     TELEGRAM_USERNAME = "Telegram_username"
@@ -18,6 +18,7 @@ class Users(Table):
     RESPONSES = "Responses"
     # --------------------------------------------------------- #
 
+    # ---------- Конструктор класса UsersTable ---------- #
     def __init__(self):
         """
         Конструктор класса Users: выполнение конструктора класса-родителя
@@ -27,8 +28,10 @@ class Users(Table):
         super().__init__("Users", self.TELEGRAM_ID)
 
         # Логирование ↓
-        self._logger.info(Text.usersConnected)
+        self._logger.info(Text.usersConnectedLog)
+    # --------------------------------------------------- #
 
+    # ---------- Переопределенные методы Table ---------- #
     def fillingTheTable(self, telegramID: int, telegramUsername: str | None) -> None:
         """
         Переопределенный метод Table, заполняющий таблицу Users
@@ -42,5 +45,6 @@ class Users(Table):
         self._connection.commit()  # сохранение изменений
 
         # Логирование ↓
-        self._logger.info(Text.fillingTheTableUsers.format(self._tableName, self.TELEGRAM_ID, telegramID,
-                                                           self.TELEGRAM_USERNAME, telegramUsername))
+        self._logger.info(Text.fillingTheTableUsersLog.format(self._tableName, self.TELEGRAM_ID, telegramID,
+                                                              self.TELEGRAM_USERNAME, telegramUsername))
+    # ---------------------------------------------------- #

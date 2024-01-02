@@ -4,12 +4,13 @@ from configs.text import Text
 # ---------------------------------------- #
 
 
-class Authorization(Table):
-    # ---------- Поля и свойства класса Authorization --------- #
+class AuthorizationTable(Table):
+    # ---------- Поля и свойства класса AuthorizationTable --------- #
     TELEGRAM_TOKEN = "Telegram_token"
     PAYMENT_TOKEN = "Payment_token"
     # --------------------------------------------------------- #
 
+    # ---------- Конструктор класса AuthorizationTable ---------- #
     def __init__(self):
         """
         Конструктор класса Authorization: выполнение конструктора класса-родителя
@@ -19,7 +20,8 @@ class Authorization(Table):
         super().__init__("Authorization", self.TELEGRAM_TOKEN)
 
         # Логирование ↓
-        self._logger.info(Text.authorizationConnected)
+        self._logger.info(Text.authorizationConnectedLog)
+    # ----------------------------------------------------------- #
 
     # ---------- Переопределенные методы Table ---------- #
     def fillingTheTable(self, telegramToken: str, paymentToken: str) -> None:
@@ -38,8 +40,8 @@ class Authorization(Table):
         self._connection.commit()  # сохранение изменений
 
         # Логирование ↓
-        self._logger.warning(Text.fillingTheTableAuthorization.format(self._tableName, self.TELEGRAM_TOKEN,
-                                                                      telegramToken, self.PAYMENT_TOKEN, paymentToken))
+        self._logger.warning(Text.fillingTheTableAuthorizationLog.format(self._tableName, self.TELEGRAM_TOKEN,
+                                                                         telegramToken, self.PAYMENT_TOKEN, paymentToken))
     # --------------------------------------------------- #
 
     # ---------- Методы импорта данных из таблицы Authorization ---------- #
