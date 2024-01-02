@@ -14,13 +14,27 @@ from configs.text import Text
 
 
 class Table(ABC):
-    # ---------- Поля и свойства класса Table ---------- #
+    # ---------- Поля класса Table ---------- #
     _connection = connect(database=Text.databaseFilepath)  # тип: sqlite3.Connection (обеспечить единственность объекта)
     _cursor = _connection.cursor()  # тип: sqlite3.Cursor (обеспечить единственность объекта)
-    _logger = getLogger("botLogger")
-    __tableName = None  # будущий тип: str (обеспечить сокрытие свойства в классе наследнике)
-    __searchColumn = None  # будущий тип: str (обеспечить сокрытие свойства в классе наследнике)
+    _logger = getLogger("botLogger")  # тип: logging.Logger (обеспечить единственность объекта)
+
     # -------------------------------------------------- #
+
+    # ---------- Конструктор класса Table ---------- #
+    def __init__(self, tableName: str, searchColumn: str):
+        """
+        Конструктор класса Table: определение необходимых полей, для корректной работы методов экспорта и импорта
+        :param tableName: название таблицы
+        :param searchColumn: название поискового столбца
+        """
+
+        self._tableName = tableName  # создание поля _tableName у экземпляра класса-наследника
+        # Создание поля __searchColumn у экземпляра класса-наследника
+        # ВАЖНО: поле __searchColumn может использоваться только в методах класса родителя
+        self.__searchColumn = searchColumn
+
+    # ---------------------------------------------- #
 
     # ---------- Абстрактные методы Table ---------- #
     @abstractmethod
@@ -44,7 +58,7 @@ class Table(ABC):
         """
 
         # Запрос в базу данных ↓
-        self._cursor.execute(f"SELECT {columnName} FROM {self.__tableName} WHERE {self.__searchColumn} = {lineData}")
+        self._cursor.execute(f"SELECT {columnName} FROM {self._tableName} WHERE {self.__searchColumn} = {lineData}")
         return self._cursor.fetchone()[0]  # возвращение одного объекта
 
     def getDataFromColumn(self, columnName: str) -> list[object]:
@@ -53,9 +67,8 @@ class Table(ABC):
         :param columnName: название столбца
         :return: list[object]
         """
-
         # Запрос в базу данных ↓
-        self._cursor.execute(f"SELECT {columnName} FROM {self.__tableName}")
+        self._cursor.execute(f"SELECT {columnName} FROM {self._tableName}")
         return [data[0] for data in self._cursor.fetchall()]  # возвращение списка объектов
 
     def getDataFromLine(self, lineData) -> list[object]:
@@ -66,7 +79,7 @@ class Table(ABC):
         """
 
         # Запрос в базу данных ↓
-        self._cursor.execute(f"SELECT * FROM {self.__tableName} WHERE {self.__searchColumn} = {lineData}")
+        self._cursor.execute(f"SELECT * FROM {self._tableName} WHERE {self.__searchColumn} = {lineData}")
         return [data for data in self._cursor.fetchone()]  # возвращение списка объектов
 
     def exportToExcel(self, filepath: str) -> None:
@@ -76,12 +89,12 @@ class Table(ABC):
         :return: NoneType
         """
         # Преобразование sqlite3.Cursor в pandas.DataFrame ↓
-        sqlQuery = read_sql_query(f"SELECT * FROM {self.__tableName}", self._connection)
+        sqlQuery = read_sql_query(f"SELECT * FROM {self._tableName}", self._connection)
         sqlQuery.to_excel(filepath, index=False)  # сохранение преобразованной информации в xlsx базу данных
 
     # ----------------------------------------------------- #
 
-    # ---------- Методы обновления данных в таблице --------- #
+    # ---------- Методы экспорта данных в таблицу --------- #
     def updateField(self, lineData, columnName: str, field) -> None:
         """
         Метод, обновляющий значение в ячейке таблицы
@@ -93,11 +106,11 @@ class Table(ABC):
 
         if field is None:
             # Изменение содержания ячейки, в случае, если new_data является пустотой ↓
-            self._cursor.execute(f"UPDATE {self.__tableName} SET {columnName} = NULL "
+            self._cursor.execute(f"UPDATE {self._tableName} SET {columnName} = NULL "
                                  f"WHERE {self.__searchColumn} = '{lineData}'")
         else:
             # Изменение содержания ячейки, в случае, если new_data не является пустотой ↓
-            self._cursor.execute(f"UPDATE {self.__tableName} SET {columnName} = '{field}' "
+            self._cursor.execute(f"UPDATE {self._tableName} SET {columnName} = '{field}' "
                                  f"WHERE {self.__searchColumn} = '{lineData}'")
         self._connection.commit()  # сохранение изменений
 
@@ -109,25 +122,7 @@ class Table(ABC):
         """
 
         # Удаление строки из таблицы ↓
-        self._cursor.execute(f"DELETE * FROM {self.__tableName} WHERE {self.__searchColumn} = '{lineData}'")
+        self._cursor.execute(f"DELETE * FROM {self._tableName} WHERE {self.__searchColumn} = '{lineData}'")
         self._connection.commit()  # сохранение изменений
 
     # ------------------------------------------------------ #
-
-    # ---------- Геттеры класса Table ---------- #
-    @classmethod
-    def getTableName(cls):
-        """
-        Геттер свойства tableName
-        :return: __tableName
-        """
-        return cls.__tableName
-
-    @classmethod
-    def getSearchColumn(cls):
-        """
-        Геттер свойства searchColumn
-        :return: __searchColumn
-        """
-        return cls.__searchColumn
-    # ----------------------------------------- #
