@@ -37,13 +37,29 @@ class SchetczeBot:
 
         # Подключение хэндлера /start ↓
         self.__dispatcher.message.register(self.__startCommandHandler, CommandStart())
-        self.__logger.info(Text.startCommandHandlerConnectedLog)
+        self.__logger.info(Text.commandHandlerConnectedLog.format(Text.startCommand))
 
         # Подключение хэндлера /database ↓
         self.__dispatcher.message.register(self.__databaseCommandHandler, Command(Text.databaseCommand),
                                            RegistrationFilter(users=self.__users),
                                            SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id))
-        self.__logger.info(Text.databaseCommandHandlerConnectedLog)
+        self.__logger.info(Text.commandHandlerConnectedLog.format(Text.databaseCommand))
+
+        # Подключение хэндлера /logs ↓
+        self.__dispatcher.message.register(self.__logsCommandHandler, Command(Text.logsCommand),
+                                           RegistrationFilter(users=self.__users),
+                                           SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id))
+        self.__logger.info(Text.commandHandlerConnectedLog.format(Text.logsCommand))
+
+
+
+
+
+        # Подключение хэндлера: обработка неизвестных сообщений ↓
+        self.__dispatcher.message.register(self.__unknownMessageHandler,
+                                           RegistrationFilter(users=self.__users),
+                                           SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id))
+        self.__logger.info(Text.unknownMessageHandlerConnectedLog)
     # ---------------------------------------------------- #
 
     # ---------- Метод-запуск бота SchetczeBot ---------- #
@@ -115,15 +131,56 @@ class SchetczeBot:
 
     async def __databaseCommandHandler(self, message: Message) -> None:
         """
-        Метод-хэндлер: обработка команды /getDatabase
+        Метод-хэндлер: обработка команды /database
         :param message: aiogram.types.Message
         :return: NoneType
         """
-        # ДОБАВИТЬ ОБРАБОТЧИК АЙДИ!!!!
-        self.__users.exportToExcel(Text.exportFilepath)  # экспорт таблицы Users
 
+        # Проверка является ли пользователь админом ↓
+        if self.__isAdmin(message.chat.id):
+            self.__users.exportToExcel(Text.exportFilepath)  # экспорт таблицы Users
+
+            # Ответ ↓
+            await self.__bot.send_document(chat_id=message.chat.id, document=FSInputFile(Text.exportFilepath))
+            remove(Text.exportFilepath)  # удаление файла
+            return
+
+        # Исключение: пользователь неадмин ↓
+        await self.__unknownMessageHandler(message=message)
+
+    async def __logsCommandHandler(self, message: Message) -> None:
+        """
+        Метод-хэндлер: обработка команды /logs
+        :param message: aiogram.types.Message
+        :return: NoneType
+        """
+
+        if self.__isAdmin(chatID=message.chat.id):
+            # Ответ ↓
+            await self.__bot.send_document(chat_id=message.chat.id, document=FSInputFile(Text.logsFilepath))
+            return
+
+        # Исключение: пользователь неадмин ↓
+        await self.__unknownMessageHandler(message=message)
+
+    async def __unknownMessageHandler(self, message: Message) -> None:
         # Ответ ↓
-        await self.__bot.send_document(chat_id=message.chat.id, document=FSInputFile(Text.exportFilepath))
-        remove(Text.exportFilepath)  # удаление файла
-
+        await self.__bot.send_message(chat_id=message.chat.id,
+                                      text=Text.unknownMessage.format(message.chat.first_name, message.text),
+                                      parse_mode="HTML")
     # ------------------------------------------------- #
+
+    # ---------- Дополнительные методы хэндлеров ---------- #
+    def __isAdmin(self, chatID: int) -> bool:
+        """
+        Метод, определяющий является ли пользователь админом
+        :param chatID: Telegram ID пользователя
+        :return: bool (True - админ, False - неадмин)
+        """
+
+        # Проверка является ли пользователь админом ↓
+        return chatID in Text.admins_id
+    # ----------------------------------------------------- #
+
+
+
