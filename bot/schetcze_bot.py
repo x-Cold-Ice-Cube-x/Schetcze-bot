@@ -1,4 +1,5 @@
 # --------- Импорты встроенных библиотек --------- #
+from os import remove
 from logging import getLogger, INFO, basicConfig
 # ------------------------------------------------ #
 
@@ -6,14 +7,17 @@ from logging import getLogger, INFO, basicConfig
 # ---------- Импорты дополнительных библиотек --------- #
 from aiogram import Dispatcher, Bot
 from aiogram.exceptions import TelegramUnauthorizedError
-from aiogram.types import Message
-from aiogram.filters import CommandStart
+from aiogram.types import Message, FSInputFile
+from aiogram.filters import CommandStart, Command
 # ----------------------------------------------------- #
 
 # ---------- Импорты из проекта ---------- #
 from tables.authorization_table import AuthorizationTable
 from tables.users_table import UsersTable
 from configs.text import Text
+from bot.markup.markup import Markup
+from bot.filters.registration_filter import RegistrationFilter
+from bot.filters.subscription_filter import SubscriptionFilter
 # ---------------------------------------- #
 
 
@@ -26,11 +30,21 @@ class SchetczeBot:
     __logger = getLogger("botLogger")  # тип: logging.Logger (обеспечить единственность объекта)
     # --------------------------------------------- #
 
+    # ---------- Конструктор класса SchetczeBot ---------- #
     def __init__(self):
         self.__setBasicConfig()  # установка базовой конфигурации логирования
         self.__doAuthorization()  # авторизация в телеграм; инициализация полей класса
 
-        self.__dispatcher.message.register(self.startCommandHandler)  #
+        # Подключение хэндлера /start ↓
+        self.__dispatcher.message.register(self.__startCommandHandler, CommandStart())
+        self.__logger.info(Text.startCommandHandlerConnectedLog)
+
+        # Подключение хэндлера /database ↓
+        self.__dispatcher.message.register(self.__databaseCommandHandler, Command(Text.databaseCommand),
+                                           RegistrationFilter(users=self.__users),
+                                           SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id))
+        self.__logger.info(Text.databaseCommandHandlerConnectedLog)
+    # ---------------------------------------------------- #
 
     # ---------- Метод-запуск бота SchetczeBot ---------- #
     async def startPolling(self):
@@ -83,6 +97,33 @@ class SchetczeBot:
     # ---------------------------------------------- #
 
     # ---------- Хэндлеры бота SchetczeBot ---------- #
-    async def startCommandHandler(self, message: Message):
-        await self.__bot.send_message(chat_id=message.chat.id, text="Оно работает бля!")
+    async def __startCommandHandler(self, message: Message) -> None:
+        """
+        Метод-хэндлер: обработка команды /start
+        :param message: aiogram.types.Message
+        :return: NoneType
+        """
+
+        # Проверка существования пользователя в базе данных ↓
+        if message.chat.id not in self.__users.getDataFromColumn(columnName=self.__users.TELEGRAM_ID):
+            # Запись в таблицу Users ↓
+            self.__users.fillingTheTable(telegramID=message.chat.id, telegramUsername=message.chat.username)
+
+        # Ответ ↓
+        await self.__bot.send_message(chat_id=message.chat.id, text=Text.startMessage.format(message.chat.first_name),
+                                      parse_mode="HTML", reply_markup=Markup.mainMarkup)
+
+    async def __databaseCommandHandler(self, message: Message) -> None:
+        """
+        Метод-хэндлер: обработка команды /getDatabase
+        :param message: aiogram.types.Message
+        :return: NoneType
+        """
+        # ДОБАВИТЬ ОБРАБОТЧИК АЙДИ!!!!
+        self.__users.exportToExcel(Text.exportFilepath)  # экспорт таблицы Users
+
+        # Ответ ↓
+        await self.__bot.send_document(chat_id=message.chat.id, document=FSInputFile(Text.exportFilepath))
+        remove(Text.exportFilepath)  # удаление файла
+
     # ------------------------------------------------- #
