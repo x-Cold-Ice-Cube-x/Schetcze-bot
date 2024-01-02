@@ -1,7 +1,7 @@
 class Text:
     # ---------- Пути к файлам --------- #
-    databaseFilepath = "databases/bot_database.sqlite"  # относительный путь к Sqlite базе
-    logsFilepath = "databases/logs.log"  # относительный путь к логам
+    databaseFilepath = "databases/bot_database.sqlite"
+    logsFilepath = "databases/logs.log"
     # ---------------------------------- #
 
     # ---------- Протокольные сообщения ---------- #
@@ -23,3 +23,16 @@ class Text:
     # ---------- ID групп и каналов ---------- #
     channel_id = -1002091618042
     # ---------------------------------------- #
+
+    # ---------- Содержание кнопок ---------- #
+    contributionButton = ("Оплатить взнос ⚔️", "contribution")
+    donationButton = ("Донат 💵", "https://yoomoney.ru/to/410019925458398")
+    responseButton = ("Оставить отзыв 🖊", "response")
+
+    cancellationButton = ("Отмена ⚙️", "cancellation")
+
+    paymentButtons = (("100₽ 💵", "payment_100"), ("200₽ 💵", "payment_200"), ("300₽ 💵", "payment_300"),
+                      ("500₽ 💵", "payment_500"))
+
+    subscribeButton = ("Турниры Бравл Старс 🎭", "https://t.me/KaktusTournaments")
+    # ---------------------------- #
