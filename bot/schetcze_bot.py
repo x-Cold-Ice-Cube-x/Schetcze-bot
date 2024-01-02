@@ -73,7 +73,7 @@ class SchetczeBot:
 
         # Подключение хэндлера успешной оплаты товара contributionPayment ↓
         self.__dispatcher.message.register(self.__contributionSuccessfulPaymentHandler,
-                                           F.successfulPayment.invoice_payload ==
+                                           F.successful_payment.invoice_payload ==
                                            Text.contributionInvoiceButton["payload"])
         self.__logger.info(Text.successfulPaymentHandlerConnectedLog.format(Text.contributionInvoiceButton["payload"]))
 
@@ -228,7 +228,7 @@ class SchetczeBot:
         :return: NoneType
         """
 
-        print("Сейчас!")
+        # Приходит, как только была нажата кнопка оплаты
         # Ответ ↓
         await self.__bot.answer_pre_checkout_query(checkout.id, ok=True)
     # ----------------------------------------------------------------- #
@@ -240,7 +240,7 @@ class SchetczeBot:
         :param message: aiogram.types.Message
         :return: NoneType
         """
-
+        print("ИВЕНТ!")
         # Получение значения ячейки Contribution пользователя ↓
         filed = int(self.__users.getDataFromField(lineData=message.chat.id, columnName=self.__users.CONTRIBUTION))
 
