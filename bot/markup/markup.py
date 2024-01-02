@@ -27,7 +27,7 @@ class Markup:
     __responseKeyboard = [[__cancellationButton]]
     __subscribeKeyboard = [[__subscribeButton]]
     __contributionKeyboard = [[__paymentButtons[0], __paymentButtons[1]], [__paymentButtons[2], __paymentButtons[3]],
-                              [__contributionButton]]
+                              [__cancellationButton]]
     # -------------------------------------------------- #
 
     # ---------- Поля класса Markup: клавиатуры ---------- #
