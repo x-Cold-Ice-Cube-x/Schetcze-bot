@@ -14,8 +14,9 @@ class Markup:
     __donationButton = InlineKeyboardButton(text=Text.donationButton[0], url=Text.donationButton[1])
     __responseButton = InlineKeyboardButton(text=Text.responseButton[0], callback_data=Text.responseButton[1])
     __cancellationButton = InlineKeyboardButton(text=Text.cancellationButton[0],
-                                                callback_data=Text.contributionButton[1])
+                                                callback_data=Text.cancellationButton[1])
     __subscribeButton = InlineKeyboardButton(text=Text.subscribeButton[0], url=Text.subscribeButton[1])
+    __youtubeButton = InlineKeyboardButton(text=Text.youtubeButton[0], url=Text.youtubeButton[1])
     __paymentButtons = [InlineKeyboardButton(text=Text.paymentButtons[0][0], callback_data=Text.paymentButtons[0][1]),
                         InlineKeyboardButton(text=Text.paymentButtons[1][0], callback_data=Text.paymentButtons[1][1]),
                         InlineKeyboardButton(text=Text.paymentButtons[2][0], callback_data=Text.paymentButtons[2][1]),
@@ -23,11 +24,11 @@ class Markup:
     # ------------------------------------------------ #
 
     # ---------- Поля класса Markup: разметки ---------- #
-    __mainKeyboard = [[__contributionButton, __donationButton], [__responseButton]]
+    __mainKeyboard = [[__contributionButton, __donationButton], [__responseButton, __youtubeButton]]
     __responseKeyboard = [[__cancellationButton]]
     __subscribeKeyboard = [[__subscribeButton]]
     __contributionKeyboard = [[__paymentButtons[0], __paymentButtons[1]], [__paymentButtons[2], __paymentButtons[3]],
-                              [__contributionButton]]
+                              [__cancellationButton]]
     # -------------------------------------------------- #
 
     # ---------- Поля класса Markup: клавиатуры ---------- #
