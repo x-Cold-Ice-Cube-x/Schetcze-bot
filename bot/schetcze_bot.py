@@ -19,6 +19,7 @@ from configs.text import Text
 from bot.markup.markup import Markup
 from bot.filters.registration_filter import RegistrationFilter
 from bot.filters.subscription_filter import SubscriptionFilter
+from bot.filters.admin_filter import AdminFilter
 # ---------------------------------------- #
 
 
@@ -43,13 +44,15 @@ class SchetczeBot:
         # Подключение хэндлера /database ↓
         self.__dispatcher.message.register(self.__databaseCommandHandler, Command(Text.databaseCommand),
                                            RegistrationFilter(users=self.__users),
-                                           SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id))
+                                           SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id),
+                                           AdminFilter())
         self.__logger.info(Text.commandHandlerConnectedLog.format(Text.databaseCommand))
 
         # Подключение хэндлера /logs ↓
         self.__dispatcher.message.register(self.__logsCommandHandler, Command(Text.logsCommand),
                                            RegistrationFilter(users=self.__users),
-                                           SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id))
+                                           SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id),
+                                           AdminFilter())
         self.__logger.info(Text.commandHandlerConnectedLog.format(Text.logsCommand))
 
         # Подключение хэндлера кнопки contribution ↓
@@ -158,17 +161,10 @@ class SchetczeBot:
         :return: NoneType
         """
 
-        # Проверка является ли пользователь админом ↓
-        if self.__isAdmin(message.chat.id):
-            self.__users.exportToExcel(Text.exportFilepath)  # экспорт таблицы Users
-
-            # Ответ ↓
-            await self.__bot.send_document(chat_id=message.chat.id, document=FSInputFile(Text.exportFilepath))
-            remove(Text.exportFilepath)  # удаление файла
-            return
-
-        # Исключение: пользователь неадмин ↓
-        await self.__unknownMessageHandler(message=message)
+        self.__users.exportToExcel(filepath=Text.exportFilepath)  # экспорт таблицы Users в xlsx
+        # Ответ ↓
+        await self.__bot.send_document(chat_id=message.chat.id, document=FSInputFile(Text.exportFilepath))
+        remove(Text.exportFilepath)  # удаление файла
 
     async def __logsCommandHandler(self, message: Message) -> None:
         """
@@ -177,13 +173,8 @@ class SchetczeBot:
         :return: NoneType
         """
 
-        if self.__isAdmin(chatID=message.chat.id):
-            # Ответ ↓
-            await self.__bot.send_document(chat_id=message.chat.id, document=FSInputFile(Text.logsFilepath))
-            return
-
-        # Исключение: пользователь неадмин ↓
-        await self.__unknownMessageHandler(message=message)
+        # Ответ ↓
+        await self.__bot.send_document(chat_id=message.chat.id, document=FSInputFile(Text.logsFilepath))
 
     # --------------------------------------------------------- #
 
@@ -267,17 +258,7 @@ class SchetczeBot:
                                       text=Text.unknownMessage.format(message.chat.first_name, message.text),
                                       parse_mode="HTML")
 
-    # ---------- Дополнительные методы хэндлеров ---------- #
-    def __isAdmin(self, chatID: int) -> bool:
-        """
-        Метод, определяющий является ли пользователь админом
-        :param chatID: Telegram ID пользователя
-        :return: bool (True - админ, False - неадмин)
-        """
 
-        # Проверка является ли пользователь админом ↓
-        return chatID in Text.admins_id
-    # ----------------------------------------------------- #
 
 
 
