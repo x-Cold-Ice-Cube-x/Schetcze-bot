@@ -1,5 +1,6 @@
 # --------- Импорты встроенных библиотек --------- #
 from os import remove
+from json import loads, dumps
 from logging import getLogger, INFO, basicConfig
 # ------------------------------------------------ #
 
@@ -10,6 +11,7 @@ from aiogram.exceptions import TelegramUnauthorizedError
 from aiogram.types import Message, FSInputFile, CallbackQuery, LabeledPrice
 from aiogram.types.pre_checkout_query import PreCheckoutQuery
 from aiogram.filters import CommandStart, Command
+from aiogram.fsm.context import FSMContext
 # ----------------------------------------------------- #
 
 # ---------- Импорты из проекта ---------- #
@@ -20,6 +22,7 @@ from bot.markup.markup import Markup
 from bot.filters.registration_filter import RegistrationFilter
 from bot.filters.subscription_filter import SubscriptionFilter
 from bot.filters.admin_filter import AdminFilter
+from bot.states.states import States
 # ---------------------------------------- #
 
 
@@ -80,11 +83,14 @@ class SchetczeBot:
                                            Text.contributionInvoiceButton["payload"])
         self.__logger.info(Text.successfulPaymentHandlerConnectedLog.format(Text.contributionInvoiceButton["payload"]))
 
-        # Подключение хэндлера: обработка неизвестных сообщений ↓
-        self.__dispatcher.message.register(self.__unknownMessageHandler,
-                                           RegistrationFilter(users=self.__users),
-                                           SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id))
-        self.__logger.info(Text.unknownMessageHandlerConnectedLog)
+        # Подключение хэндлера кнопки response ↓
+        self.__dispatcher.callback_query.register(self.__responseCallbackHandler,
+                                                  F.data == Text.responseButton[1],
+                                                  RegistrationFilter(users=self.__users),
+                                                  SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id),
+                                                  )
+        self.__dispatcher.message.register(self.__responseMessageHandler, States.responseState)
+
     # ---------------------------------------------------- #
 
     # ---------- Метод-запуск бота SchetczeBot ---------- #
@@ -209,6 +215,23 @@ class SchetczeBot:
                                       need_phone_number=True,
                                       prices=[LabeledPrice(label=Text.contributionInvoiceButton["label"],
                                                            amount=contribution)])
+
+    async def __responseCallbackHandler(self, call: CallbackQuery, state: FSMContext) -> None:
+        """
+        Метод-хэндлер: обработка кнопки response
+        :param call: aiogram.types.CallbackQuery
+        :param state: aiogram.fsm.FSMContext
+        :return: NoneType
+        """
+
+        # Ответ ↓
+        await self.__bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
+                                           text=Text.responseMessage.format(call.message.chat.first_name),
+                                           parse_mode="HTML", reply_markup=Markup.responseMarkup)
+
+        await state.set_state(States.responseState)  # активация responseState
+        # Добавление значения сообщения для дальнейшего изменения ↓
+        await state.update_data({"message_id": call.message.message_id})
     # ------------------------------------------------------------- #
 
     # ---------- Хэндлеры бота SchetczeBot: PreCheckoutQuery ---------- #
@@ -252,11 +275,38 @@ class SchetczeBot:
                                       parse_mode="HTML", reply_markup=Markup.mainMarkup)
     # ----------------------------------------------------------------- #
 
+    # ---------- Хэндлер бота SchetczeBot: Message ---------- #
+
+    async def __responseMessageHandler(self, message: Message, state: FSMContext):
+        if len(message.text) > 50:
+
+            # Получение отзывов пользователя ↓
+            responses = list(loads(str(self.__users.getDataFromField(lineData=message.chat.id,
+                                                                     columnName=self.__users.RESPONSES))))
+            responses.append(message.text)  # добавление нового отзыва
+            # Добавление нового отзыва в ячейку пользователя ↓
+            self.__users.updateField(lineData=message.chat.id,
+                                     columnName=self.__users.RESPONSES, field=dumps(responses))
+
+        stateData = await state.get_data()  # получение stateData (см ____responseCallbackHandler)
+        # Удаление сообщения ↓
+        await self.__bot.delete_message(chat_id=message.chat.id, message_id=stateData["message_id"])
+
+        # Отправка сообщения: responseCommitMessage и startMessage ↓
+        await self.__bot.send_message(chat_id=message.chat.id,
+                                      text=Text.responseCommitMessage.format(message.chat.first_name),
+                                      parse_mode="HTML")
+        await self.__bot.send_message(chat_id=message.chat.id,
+                                      text=Text.startMessage.format(message.chat.first_name),
+                                      parse_mode="HTML", reply_markup=Markup.mainMarkup)
+        await state.clear()  # очищение State
+
     async def __unknownMessageHandler(self, message: Message) -> None:
         # Ответ ↓
         await self.__bot.send_message(chat_id=message.chat.id,
                                       text=Text.unknownMessage.format(message.chat.first_name, message.text),
                                       parse_mode="HTML")
+    # ------------------------------------------------------- #
 
 
 

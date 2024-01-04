@@ -35,6 +35,7 @@ class Text:
     contributionButton = ("Оплатить взнос ⚔️", "contribution")
     donationButton = ("Донат 💵", "https://yoomoney.ru/to/410019925458398")
     responseButton = ("Оставить отзыв 🖊", "response")
+    youtubeButton = ("Наш YouTube 📹", "http://www.youtube.com/@Shetcze")
 
     cancellationButton = ("Отмена ⚙️", "cancellation")
 
