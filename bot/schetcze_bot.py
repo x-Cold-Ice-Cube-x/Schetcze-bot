@@ -40,57 +40,88 @@ class SchetczeBot:
         self.__setBasicConfig()  # установка базовой конфигурации логирования
         self.__doAuthorization()  # авторизация в телеграм; инициализация полей класса
 
-        # Подключение хэндлера /start ↓
-        self.__dispatcher.message.register(self.__startCommandHandler, CommandStart())
-        self.__logger.info(Text.commandHandlerConnectedLog.format(Text.startCommand))
-
-        # Подключение хэндлера /database ↓
-        self.__dispatcher.message.register(self.__databaseCommandHandler, Command(Text.databaseCommand),
-                                           RegistrationFilter(users=self.__users),
-                                           SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id),
-                                           AdminFilter())
-        self.__logger.info(Text.commandHandlerConnectedLog.format(Text.databaseCommand))
-
-        # Подключение хэндлера /logs ↓
-        self.__dispatcher.message.register(self.__logsCommandHandler, Command(Text.logsCommand),
-                                           RegistrationFilter(users=self.__users),
-                                           SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id),
-                                           AdminFilter())
-        self.__logger.info(Text.commandHandlerConnectedLog.format(Text.logsCommand))
-
-        # Подключение хэндлера кнопки contribution ↓
+        # Подключение хэндлера кнопки contribution
         self.__dispatcher.callback_query.register(self.__contributionCallbackHandler,
                                                   F.data == Text.contributionButton[1],
-                                                  RegistrationFilter(users=self.__users),
-                                                  SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id))
+                                                  SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id),
+                                                  RegistrationFilter(users=self.__users))
         self.__logger.info(Text.buttonHandlerConnectedLog.format(Text.contributionButton[1]))
 
-        # Подключение хэндлера кнопок типа payment ↓
+        # Подключение хэндлера кнопки response
+        self.__dispatcher.callback_query.register(self.__responseCallbackHandler,
+                                                  F.data == Text.responseButton[1],
+                                                  SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id),
+                                                  RegistrationFilter(users=self.__users))
+        self.__logger.info(Text.buttonHandlerConnectedLog.format(Text.responseButton[1]))
+
+        # Подключение хэндлера кнопки cancellation
+        self.__dispatcher.callback_query.register(self.__cancellationCallbackHandler,
+                                                  F.data == Text.cancellationButton[1],
+                                                  SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id),
+                                                  RegistrationFilter(users=self.__users))
+        self.__logger.info(Text.buttonHandlerConnectedLog.format(Text.cancellationButton[1]))
+
+        # Подключение хэндлера кнопок paymentType
         self.__dispatcher.callback_query.register(self.__contributionPaymentHandler,
                                                   F.data.startswith(Text.paymentButtonType),
-                                                  RegistrationFilter(users=self.__users),
-                                                  SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id))
-        self.__logger.info(Text.buttonHandlerConnectedLog.format(Text.paymentButtonType))
+                                                  SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id),
+                                                  RegistrationFilter(users=self.__users))
+        self.__logger.info(Text.buttonHandlerConnectedLog.format(Text.paymentButtonType + " type"))
 
-        # Подключение хэндлера готовности contributionPayment платежа ↓
+        # Подключение хэндлера готовности contribution платежа ↓
         self.__dispatcher.pre_checkout_query.register(self.__contributionPreCheckoutHandler,
                                                       F.invoice_payload == Text.contributionInvoiceButton["payload"])
         self.__logger.info(Text.checkoutHandlerConnectedLog.format(Text.contributionInvoiceButton["payload"]))
 
-        # Подключение хэндлера успешной оплаты товара contributionPayment ↓
+        # Подключение хэндлера успешной оплаты товара contribution ↓
         self.__dispatcher.message.register(self.__contributionSuccessfulPaymentHandler,
                                            F.successful_payment.invoice_payload ==
                                            Text.contributionInvoiceButton["payload"])
         self.__logger.info(Text.successfulPaymentHandlerConnectedLog.format(Text.contributionInvoiceButton["payload"]))
 
-        # Подключение хэндлера кнопки response ↓
-        self.__dispatcher.callback_query.register(self.__responseCallbackHandler,
-                                                  F.data == Text.responseButton[1],
-                                                  RegistrationFilter(users=self.__users),
-                                                  SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id),
-                                                  )
-        self.__dispatcher.message.register(self.__responseMessageHandler, States.responseState)
+        # Подключение хэндлера получения и записи отзыва
+        self.__dispatcher.message.register(self.__responseMessageHandler,
+                                           States.responseState,
+                                           SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id),
+                                           RegistrationFilter(users=self.__users))
+        self.__dispatcher.message.register(self.__responseMessageHandler,
+                                           States.responseState, CommandStart(),
+                                           Command(Text.logsCommand), Command(Text.databaseCommand),
+                                           SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id),
+                                           RegistrationFilter(users=self.__users))
+        self.__logger.info(Text.responseMessageHandlerConnectedLog)
 
+        # Подключение хэндлера команды /start ↓
+        self.__dispatcher.message.register(self.__startCommandHandler, CommandStart(),
+                                           SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id))
+        self.__logger.info(Text.commandHandlerConnectedLog.format(Text.startCommand))
+
+        # Подключение хэндлера команды /database
+        self.__dispatcher.message.register(self.__databaseCommandHandler, Command(Text.databaseCommand),
+                                           SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id),
+                                           RegistrationFilter(users=self.__users), AdminFilter())
+        self.__logger.info(Text.commandHandlerConnectedLog.format(Text.databaseCommand))
+
+        # Подключение хэндлера команды /logs
+        self.__dispatcher.message.register(self.__logsCommandHandler, Command(Text.logsCommand),
+                                           SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id),
+                                           RegistrationFilter(users=self.__users), AdminFilter())
+        self.__logger.info(Text.commandHandlerConnectedLog.format(Text.logsCommand))
+
+        # Подключение хэндлера неизвестных сообщений ↓
+        self.__dispatcher.message.register(self.__unknownMessageHandler,
+                                           SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id),
+                                           RegistrationFilter(users=self.__users))
+        self.__logger.info(Text.unknownMessageHandlerConnectedLog)
+
+        # Подключение хэндлера незарегистрированных пользователей ↓
+        self.__dispatcher.message.register(self.__unregisteredUserHandler,
+                                           SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id))
+        self.__logger.info(Text.unregisteredUserHandlerConnectedLog)
+
+        # Подключение хэндлера неподписанных пользователей ↓
+        self.__dispatcher.message.register(self.__unsubscribedUserHandler)
+        self.__logger.info(Text.unsubscribedUserHandlerConnectedLog)
     # ---------------------------------------------------- #
 
     # ---------- Метод-запуск бота SchetczeBot ---------- #
@@ -232,6 +263,16 @@ class SchetczeBot:
         await state.set_state(States.responseState)  # активация responseState
         # Добавление значения сообщения для дальнейшего изменения ↓
         await state.update_data({"message_id": call.message.message_id})
+
+    async def __cancellationCallbackHandler(self, call: CallbackQuery) -> None:
+        """
+        Метод-хэндлер: обработчик кнопку cancellation
+        :param call: aiogram.types.CallbackQuery
+        :return: NoneType
+        """
+        await self.__bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
+                                           text=Text.startMessage.format(call.message.chat.first_name),
+                                           parse_mode="HTML", reply_markup=Markup.mainMarkup)
     # ------------------------------------------------------------- #
 
     # ---------- Хэндлеры бота SchetczeBot: PreCheckoutQuery ---------- #
@@ -241,7 +282,6 @@ class SchetczeBot:
         :param checkout: aiogram.types.pre_checkout_query.PreCheckoutQuery
         :return: NoneType
         """
-
         # Приходит, как только была нажата кнопка оплаты
         # Ответ ↓
         await self.__bot.answer_pre_checkout_query(checkout.id, ok=True)
@@ -254,7 +294,6 @@ class SchetczeBot:
         :param message: aiogram.types.Message
         :return: NoneType
         """
-        print("ИВЕНТ!")
         # Получение значения ячейки Contribution пользователя ↓
         filed = int(self.__users.getDataFromField(lineData=message.chat.id, columnName=self.__users.CONTRIBUTION))
 
@@ -264,7 +303,7 @@ class SchetczeBot:
         self.__users.updateField(lineData=message.chat.id, columnName=self.__users.PHONE_NUMBER,
                                  field=message.successful_payment.order_info.phone_number)
         self.__users.updateField(lineData=message.chat.id, columnName=self.__users.CONTRIBUTION,
-                                 field=filed + int(message.successful_payment.total_amount))
+                                 field=filed + int(message.successful_payment.total_amount // 100))
 
         # Генерация и отправка благодарственного сообщения ↓
         replyMessage = Text.thankForBuyingMessage.format(message.chat.first_name)
@@ -273,6 +312,9 @@ class SchetczeBot:
         # Отправка главного меню ↓
         await self.__bot.send_message(chat_id=message.chat.id, text=Text.startMessage.format(message.chat.first_name),
                                       parse_mode="HTML", reply_markup=Markup.mainMarkup)
+        self.__logger.info(Text.successfulPaymentLog.format(message.chat.first_name,
+                                                            Text.contributionInvoiceButton["payload"],
+                                                            int(message.successful_payment.total_amount // 100)))
     # ----------------------------------------------------------------- #
 
     # ---------- Хэндлер бота SchetczeBot: Message ---------- #
@@ -305,6 +347,27 @@ class SchetczeBot:
         # Ответ ↓
         await self.__bot.send_message(chat_id=message.chat.id,
                                       text=Text.unknownMessage.format(message.chat.first_name, message.text),
+                                      parse_mode="HTML")
+
+    async def __unsubscribedUserHandler(self, message: Message) -> None:
+        """
+        Метод-хэндлер: обработка неподписанного пользователя
+        :param message: aiogram.types.Message
+        :return: NoneType
+        """
+
+        await self.__bot.send_message(chat_id=message.chat.id,
+                                      text=Text.unsubscribedMessage.format(message.chat.first_name),
+                                      parse_mode="HTML", reply_markup=Markup.subscribeMarkup)
+
+    async def __unregisteredUserHandler(self, message: Message) -> None:
+        """
+        Метод-хэндлер: обработка незарегистрированного пользователя
+        :param message: aiogram.types.Message
+        :return: NoneType
+        """
+        await self.__bot.send_message(chat_id=message.chat.id,
+                                      text=Text.unregisteredMessage.format(message.chat.first_name),
                                       parse_mode="HTML")
     # ------------------------------------------------------- #
 
