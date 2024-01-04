@@ -328,7 +328,7 @@ class SchetczeBot:
             responses.append(message.text)  # добавление нового отзыва
             # Добавление нового отзыва в ячейку пользователя ↓
             self.__users.updateField(lineData=message.chat.id,
-                                     columnName=self.__users.RESPONSES, field=dumps(responses))
+                                     columnName=self.__users.RESPONSES, field=dumps(responses, ensure_ascii=False))
 
         stateData = await state.get_data()  # получение stateData (см ____responseCallbackHandler)
         # Удаление сообщения ↓
