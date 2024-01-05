@@ -115,12 +115,15 @@ class SchetczeBot:
         self.__logger.info(Text.unknownMessageHandlerConnectedLog)
 
         # Подключение хэндлера незарегистрированных пользователей ↓
-        self.__dispatcher.message.register(self.__unregisteredUserHandler,
+        self.__dispatcher.message.register(self.__unregisteredMessageHandler,
                                            SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id))
+        self.__dispatcher.callback_query.register(self.__unregisteredCallbackHandler,
+                                                  SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id))
         self.__logger.info(Text.unregisteredUserHandlerConnectedLog)
 
         # Подключение хэндлера неподписанных пользователей ↓
-        self.__dispatcher.message.register(self.__unsubscribedUserHandler)
+        self.__dispatcher.message.register(self.__unsubscribedMessageHandler)
+        self.__dispatcher.callback_query.register(self.__unsubscribedCallbackHandler)
         self.__logger.info(Text.unsubscribedUserHandlerConnectedLog)
     # ---------------------------------------------------- #
 
@@ -273,6 +276,28 @@ class SchetczeBot:
         await self.__bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
                                            text=Text.startMessage.format(call.message.chat.first_name),
                                            parse_mode="HTML", reply_markup=Markup.mainMarkup)
+
+    async def __unsubscribedCallbackHandler(self, call: Message) -> None:
+        """
+        Метод-хэндлер: обработка неподписанного пользователя
+        :param call: aiogram.types.CallbackQuery
+        :return: NoneType
+        """
+
+        await self.__bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
+                                           text=Text.unsubscribedMessage.format(call.message.chat.first_name),
+                                           parse_mode="HTML", reply_markup=Markup.subscribeMarkup)
+
+    async def __unregisteredCallbackHandler(self, call: CallbackQuery) -> None:
+        """
+        Метод-хэндлер: обработка незарегистрированного пользователя
+        :param call: aiogram.types.CallbackQuery
+        :return: NoneType
+        """
+
+        await self.__bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
+                                           text=Text.unregisteredMessage.format(call.message.chat.first_name),
+                                           parse_mode="HTML")
     # ------------------------------------------------------------- #
 
     # ---------- Хэндлеры бота SchetczeBot: PreCheckoutQuery ---------- #
@@ -349,7 +374,7 @@ class SchetczeBot:
                                       text=Text.unknownMessage.format(message.chat.first_name, message.text),
                                       parse_mode="HTML")
 
-    async def __unsubscribedUserHandler(self, message: Message) -> None:
+    async def __unsubscribedMessageHandler(self, message: Message) -> None:
         """
         Метод-хэндлер: обработка неподписанного пользователя
         :param message: aiogram.types.Message
@@ -360,7 +385,7 @@ class SchetczeBot:
                                       text=Text.unsubscribedMessage.format(message.chat.first_name),
                                       parse_mode="HTML", reply_markup=Markup.subscribeMarkup)
 
-    async def __unregisteredUserHandler(self, message: Message) -> None:
+    async def __unregisteredMessageHandler(self, message: Message) -> None:
         """
         Метод-хэндлер: обработка незарегистрированного пользователя
         :param message: aiogram.types.Message
