@@ -7,7 +7,6 @@ from logging import getLogger, INFO, basicConfig
 
 # ---------- Импорты дополнительных библиотек --------- #
 from aiogram import Dispatcher, Bot, F
-from aiogram.exceptions import TelegramUnauthorizedError
 from aiogram.types import Message, FSInputFile, CallbackQuery, LabeledPrice
 from aiogram.types.pre_checkout_query import PreCheckoutQuery
 from aiogram.filters import CommandStart, Command
@@ -23,55 +22,58 @@ from bot.filters.registration_filter import RegistrationFilter
 from bot.filters.subscription_filter import SubscriptionFilter
 from bot.filters.admin_filter import AdminFilter
 from bot.states.states import States
+
+
 # ---------------------------------------- #
 
 
-class SchetczeBot:
+class SchetczeBot(Bot):
     # ---------- Поля класса SchetczeBot ---------- #
     __auth = None  # тип: AuthorizationTable (обеспечить единственность объекта)
     __users = None  # тип: UsersTable (обеспечить единственность объекта)
-    __bot = None  # тип: aiogram.Bot (обеспечить единственность объекта)
-    __dispatcher = Dispatcher()  # тип: aiogram.Dispatcher (обеспечить единственность объекта)
+    __dispatcher = None  # тип: aiogram.Dispatcher (обеспечить единственность объекта)
     __logger = getLogger("botLogger")  # тип: logging.Logger (обеспечить единственность объекта)
+
     # --------------------------------------------- #
 
     # ---------- Конструктор класса SchetczeBot ---------- #
     def __init__(self):
-        self.__setBasicConfig()  # установка базовой конфигурации логирования
-        self.__doAuthorization()  # авторизация в телеграм; инициализация полей класса
+        self.__setBasicConfig()  # создание объекта Logger (заранее, потому что дальше идет инициализация объектов)
+        self.__setAttributes()  # заполнение всех полей класса
+        super().__init__(token=self.__auth.getTelegramToken())  # авторизация бота в Telegram
 
         # Подключение хэндлера кнопки contribution
         self.__dispatcher.callback_query.register(self.__contributionCallbackHandler,
                                                   F.data == Text.contributionButton[1],
-                                                  SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id),
+                                                  SubscriptionFilter(bot=self, chatID=Text.channel_id),
                                                   RegistrationFilter(users=self.__users))
         self.__logger.info(Text.buttonHandlerConnectedLog.format(Text.contributionButton[1]))
 
         # Подключение хэндлера кнопки response
         self.__dispatcher.callback_query.register(self.__responseCallbackHandler,
                                                   F.data == Text.responseButton[1],
-                                                  SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id),
+                                                  SubscriptionFilter(bot=self, chatID=Text.channel_id),
                                                   RegistrationFilter(users=self.__users))
         self.__logger.info(Text.buttonHandlerConnectedLog.format(Text.responseButton[1]))
 
         # Подключение хэндлера кнопки info
         self.__dispatcher.callback_query.register(self.__infoCallbackHandler,
                                                   F.data == Text.infoButton[1],
-                                                  SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id),
+                                                  SubscriptionFilter(bot=self, chatID=Text.channel_id),
                                                   RegistrationFilter(users=self.__users))
         self.__logger.info(Text.buttonHandlerConnectedLog.format(Text.infoButton[1]))
 
         # Подключение хэндлера кнопки cancellation
         self.__dispatcher.callback_query.register(self.__cancellationCallbackHandler,
                                                   F.data == Text.cancellationButton[1],
-                                                  SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id),
+                                                  SubscriptionFilter(bot=self, chatID=Text.channel_id),
                                                   RegistrationFilter(users=self.__users))
         self.__logger.info(Text.buttonHandlerConnectedLog.format(Text.cancellationButton[1]))
 
         # Подключение хэндлера кнопок paymentType
         self.__dispatcher.callback_query.register(self.__contributionPaymentHandler,
                                                   F.data.startswith(Text.paymentButtonType),
-                                                  SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id),
+                                                  SubscriptionFilter(bot=self, chatID=Text.channel_id),
                                                   RegistrationFilter(users=self.__users))
         self.__logger.info(Text.buttonHandlerConnectedLog.format(Text.paymentButtonType + " type"))
 
@@ -89,88 +91,53 @@ class SchetczeBot:
         # Подключение хэндлера получения и записи отзыва
         self.__dispatcher.message.register(self.__responseMessageHandler,
                                            States.responseState,
-                                           SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id),
+                                           SubscriptionFilter(bot=self, chatID=Text.channel_id),
                                            RegistrationFilter(users=self.__users))
         self.__dispatcher.message.register(self.__responseMessageHandler,
                                            States.responseState, CommandStart(),
                                            Command(Text.logsCommand), Command(Text.databaseCommand),
-                                           SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id),
+                                           SubscriptionFilter(bot=self, chatID=Text.channel_id),
                                            RegistrationFilter(users=self.__users))
         self.__logger.info(Text.responseMessageHandlerConnectedLog)
 
         # Подключение хэндлера команды /start ↓
         self.__dispatcher.message.register(self.__startCommandHandler, CommandStart(),
-                                           SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id))
+                                           SubscriptionFilter(bot=self, chatID=Text.channel_id))
         self.__logger.info(Text.commandHandlerConnectedLog.format(Text.startCommand))
 
         # Подключение хэндлера команды /database
         self.__dispatcher.message.register(self.__databaseCommandHandler, Command(Text.databaseCommand),
-                                           SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id),
+                                           SubscriptionFilter(bot=self, chatID=Text.channel_id),
                                            RegistrationFilter(users=self.__users), AdminFilter())
         self.__logger.info(Text.commandHandlerConnectedLog.format(Text.databaseCommand))
 
         # Подключение хэндлера команды /logs
         self.__dispatcher.message.register(self.__logsCommandHandler, Command(Text.logsCommand),
-                                           SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id),
+                                           SubscriptionFilter(bot=self, chatID=Text.channel_id),
                                            RegistrationFilter(users=self.__users), AdminFilter())
         self.__logger.info(Text.commandHandlerConnectedLog.format(Text.logsCommand))
 
         # Подключение хэндлера неизвестных сообщений ↓
         self.__dispatcher.message.register(self.__unknownMessageHandler,
-                                           SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id),
+                                           SubscriptionFilter(bot=self, chatID=Text.channel_id),
                                            RegistrationFilter(users=self.__users))
         self.__logger.info(Text.unknownMessageHandlerConnectedLog)
 
         # Подключение хэндлера незарегистрированных пользователей ↓
         self.__dispatcher.message.register(self.__unregisteredMessageHandler,
-                                           SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id))
+                                           SubscriptionFilter(bot=self, chatID=Text.channel_id))
         self.__dispatcher.callback_query.register(self.__unregisteredCallbackHandler,
-                                                  SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id))
+                                                  SubscriptionFilter(bot=self, chatID=Text.channel_id))
         self.__logger.info(Text.unregisteredUserHandlerConnectedLog)
 
         # Подключение хэндлера неподписанных пользователей ↓
         self.__dispatcher.message.register(self.__unsubscribedMessageHandler)
         self.__dispatcher.callback_query.register(self.__unsubscribedCallbackHandler)
         self.__logger.info(Text.unsubscribedUserHandlerConnectedLog)
+
     # ---------------------------------------------------- #
 
-    # ---------- Метод-запуск бота SchetczeBot ---------- #
-    async def startPolling(self):
-        await self.__tokenVerification()  # асинхронная проверка актуальности Telegram-токена
-        await self.__dispatcher.start_polling(self.__bot)  # запуск бесконечного ожидания
-        # Логирование ↓
-        self.__logger.info(Text.pollingStartedLog)
-    # --------------------------------------------------- #
-
     # ---------- Методы класса SchetczeBot ---------- #
-    @classmethod
-    def __doAuthorization(cls):
-        """
-        Метод-авторизация бота в Telegram; заполнение полей __bot, __auth, __users
-        :return: NoneType
-        """
-        cls.__auth = AuthorizationTable()  # запись объекта Authorization в поля класса
-        cls.__users = UsersTable()  # Запись объекта Authorization в поля класса
-        cls.__bot = Bot(token=cls.__auth.getTelegramToken())  # запись объекта aiogram.Bot в поля класса
-
-    @classmethod
-    async def __tokenVerification(cls) -> None:
-        """
-        Метод, проверяющий актуальность Telegram-токена, хранящегося в таблице Users
-        :return: NoneType
-        """
-        # Если Telegram-токен верен, то блок выполнится без ошибки (возможно есть более простой путь) ↓
-        # P.S - теперь при неактуальном Telegram-токене, программа завершает свое действие
-        try:
-            await cls.__bot.get_me()
-            # Логирование ↓
-            cls.__logger.info(Text.tokenVerificationPassedLog)
-
-        except TelegramUnauthorizedError:
-            # Логирование ↓
-            cls.__logger.error(Text.tokenVerificationErrorLog)
-            exit()
-
     @classmethod
     def __setBasicConfig(cls) -> None:
         """
@@ -182,7 +149,26 @@ class SchetczeBot:
                     filename=Text.logsFilepath, filemode='a')
         # Логирование ↓
         cls.__logger.info(Text.loggerConnectedLog)
+
+    @classmethod
+    def __setAttributes(cls) -> None:
+        """
+        Метод, заполняющий поля класса SchetczeBot (создание необходимых объектов)
+        :return: None
+        """
+
+        cls.__auth = AuthorizationTable()  # заполнение поля класса __auth
+        cls.__users = UsersTable()  # заполнение поля класса __users
+        cls.__dispatcher = Dispatcher()  # заполнение поля класса __dispatcher
     # ---------------------------------------------- #
+
+    # ---------- Метод-запуск бота SchetczeBot ---------- #
+    async def startPolling(self):
+        await self.__dispatcher.start_polling(self)  # запуск бесконечного ожидания
+        # Логирование ↓
+        self.__logger.info(Text.pollingStartedLog)
+
+    # --------------------------------------------------- #
 
     # ---------- Хэндлеры бота SchetczeBot: Commands ---------- #
     async def __startCommandHandler(self, message: Message) -> None:
@@ -198,8 +184,8 @@ class SchetczeBot:
             self.__users.fillingTheTable(telegramID=message.chat.id, telegramUsername=message.chat.username)
 
         # Ответ ↓
-        await self.__bot.send_message(chat_id=message.chat.id, text=Text.startMessage.format(message.chat.first_name),
-                                      parse_mode="HTML", reply_markup=Markup.mainMarkup)
+        await self.send_message(chat_id=message.chat.id, text=Text.startMessage.format(message.chat.first_name),
+                                parse_mode="HTML", reply_markup=Markup.mainMarkup)
 
     async def __databaseCommandHandler(self, message: Message) -> None:
         """
@@ -210,7 +196,7 @@ class SchetczeBot:
 
         self.__users.exportToExcel(filepath=Text.exportFilepath)  # экспорт таблицы Users в xlsx
         # Ответ ↓
-        await self.__bot.send_document(chat_id=message.chat.id, document=FSInputFile(Text.exportFilepath))
+        await self.send_document(chat_id=message.chat.id, document=FSInputFile(Text.exportFilepath))
         remove(Text.exportFilepath)  # удаление файла
 
     async def __logsCommandHandler(self, message: Message) -> None:
@@ -221,7 +207,7 @@ class SchetczeBot:
         """
 
         # Ответ ↓
-        await self.__bot.send_document(chat_id=message.chat.id, document=FSInputFile(Text.logsFilepath))
+        await self.send_document(chat_id=message.chat.id, document=FSInputFile(Text.logsFilepath))
 
     # --------------------------------------------------------- #
 
@@ -233,9 +219,9 @@ class SchetczeBot:
         :return: NoneType
         """
         # Ответ ↓
-        await self.__bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
-                                           text=Text.contributionMessage.format(call.message.chat.first_name),
-                                           parse_mode="HTML", reply_markup=Markup.contributionMarkup)
+        await self.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
+                                     text=Text.contributionMessage.format(call.message.chat.first_name),
+                                     parse_mode="HTML", reply_markup=Markup.contributionMarkup)
 
     async def __contributionPaymentHandler(self, call: CallbackQuery) -> None:
         """
@@ -247,15 +233,15 @@ class SchetczeBot:
         contribution = int(call.data[8:]) * 100  # получение размера взноса из callback.data
 
         # Удаление прошлого сообщения; отправка запроса на оплату ↓
-        await self.__bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.message_id)
-        await self.__bot.send_invoice(chat_id=call.message.chat.id, title=Text.contributionInvoiceButton["title"],
-                                      description=Text.contributionInvoiceButton["description"],
-                                      payload=Text.contributionInvoiceButton["payload"],
-                                      provider_token=self.__auth.getPaymentToken(),
-                                      currency=Text.contributionInvoiceButton["currency"], need_email=True,
-                                      need_phone_number=True,
-                                      prices=[LabeledPrice(label=Text.contributionInvoiceButton["label"],
-                                                           amount=contribution)])
+        await self.delete_message(chat_id=call.message.chat.id, message_id=call.message.message_id)
+        await self.send_invoice(chat_id=call.message.chat.id, title=Text.contributionInvoiceButton["title"],
+                                description=Text.contributionInvoiceButton["description"],
+                                payload=Text.contributionInvoiceButton["payload"],
+                                provider_token=self.__auth.getPaymentToken(),
+                                currency=Text.contributionInvoiceButton["currency"], need_email=True,
+                                need_phone_number=True,
+                                prices=[LabeledPrice(label=Text.contributionInvoiceButton["label"],
+                                                     amount=contribution)])
 
     async def __responseCallbackHandler(self, call: CallbackQuery, state: FSMContext) -> None:
         """
@@ -266,9 +252,9 @@ class SchetczeBot:
         """
 
         # Ответ ↓
-        await self.__bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
-                                           text=Text.responseMessage.format(call.message.chat.first_name),
-                                           parse_mode="HTML", reply_markup=Markup.cancellationMarkup)
+        await self.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
+                                     text=Text.responseMessage.format(call.message.chat.first_name),
+                                     parse_mode="HTML", reply_markup=Markup.cancellationMarkup)
 
         await state.set_state(States.responseState)  # активация responseState
         # Добавление значения сообщения для дальнейшего изменения ↓
@@ -280,14 +266,14 @@ class SchetczeBot:
         :param call: aiogram.types.CallbackQuery
         :return: NoneType
         """
-        await self.__bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
-                                           text=Text.startMessage.format(call.message.chat.first_name),
-                                           parse_mode="HTML", reply_markup=Markup.mainMarkup)
+        await self.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
+                                     text=Text.startMessage.format(call.message.chat.first_name),
+                                     parse_mode="HTML", reply_markup=Markup.mainMarkup)
 
     async def __infoCallbackHandler(self, call: CallbackQuery) -> None:
-        await self.__bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
-                                           text=Text.infoMessage, parse_mode="HTML",
-                                           reply_markup=Markup.cancellationMarkup)
+        await self.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
+                                     text=Text.infoMessage, parse_mode="HTML",
+                                     reply_markup=Markup.cancellationMarkup)
 
     async def __unsubscribedCallbackHandler(self, call: Message) -> None:
         """
@@ -296,9 +282,9 @@ class SchetczeBot:
         :return: NoneType
         """
 
-        await self.__bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
-                                           text=Text.unsubscribedMessage.format(call.message.chat.first_name),
-                                           parse_mode="HTML", reply_markup=Markup.subscribeMarkup)
+        await self.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
+                                     text=Text.unsubscribedMessage.format(call.message.chat.first_name),
+                                     parse_mode="HTML", reply_markup=Markup.subscribeMarkup)
 
     async def __unregisteredCallbackHandler(self, call: CallbackQuery) -> None:
         """
@@ -307,9 +293,10 @@ class SchetczeBot:
         :return: NoneType
         """
 
-        await self.__bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
-                                           text=Text.unregisteredMessage.format(call.message.chat.first_name),
-                                           parse_mode="HTML")
+        await self.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
+                                     text=Text.unregisteredMessage.format(call.message.chat.first_name),
+                                     parse_mode="HTML")
+
     # ------------------------------------------------------------- #
 
     # ---------- Хэндлеры бота SchetczeBot: PreCheckoutQuery ---------- #
@@ -321,7 +308,8 @@ class SchetczeBot:
         """
         # Приходит, как только была нажата кнопка оплаты
         # Ответ ↓
-        await self.__bot.answer_pre_checkout_query(checkout.id, ok=True)
+        await self.answer_pre_checkout_query(checkout.id, ok=True)
+
     # ----------------------------------------------------------------- #
 
     # --------- Хэндлеры бота SchetczeBot: SuccessfulPayment ---------- #
@@ -344,21 +332,21 @@ class SchetczeBot:
 
         # Генерация и отправка благодарственного сообщения ↓
         replyMessage = Text.thankForBuyingMessage.format(message.chat.first_name)
-        await self.__bot.send_message(chat_id=message.chat.id, text=replyMessage, parse_mode="HTML")
+        await self.send_message(chat_id=message.chat.id, text=replyMessage, parse_mode="HTML")
 
         # Отправка главного меню ↓
-        await self.__bot.send_message(chat_id=message.chat.id, text=Text.startMessage.format(message.chat.first_name),
-                                      parse_mode="HTML", reply_markup=Markup.mainMarkup)
+        await self.send_message(chat_id=message.chat.id, text=Text.startMessage.format(message.chat.first_name),
+                                parse_mode="HTML", reply_markup=Markup.mainMarkup)
         self.__logger.info(Text.successfulPaymentLog.format(message.chat.first_name,
                                                             Text.contributionInvoiceButton["payload"],
                                                             int(message.successful_payment.total_amount // 100)))
+
     # ----------------------------------------------------------------- #
 
     # ---------- Хэндлер бота SchetczeBot: Message ---------- #
 
     async def __responseMessageHandler(self, message: Message, state: FSMContext):
         if len(message.text) > 50:
-
             # Получение отзывов пользователя ↓
             responses = list(loads(str(self.__users.getDataFromField(lineData=message.chat.id,
                                                                      columnName=self.__users.RESPONSES))))
@@ -369,22 +357,22 @@ class SchetczeBot:
 
         stateData = await state.get_data()  # получение stateData (см ____responseCallbackHandler)
         # Удаление сообщения ↓
-        await self.__bot.delete_message(chat_id=message.chat.id, message_id=stateData["message_id"])
+        await self.delete_message(chat_id=message.chat.id, message_id=stateData["message_id"])
 
         # Отправка сообщения: responseCommitMessage и startMessage ↓
-        await self.__bot.send_message(chat_id=message.chat.id,
-                                      text=Text.responseCommitMessage.format(message.chat.first_name),
-                                      parse_mode="HTML")
-        await self.__bot.send_message(chat_id=message.chat.id,
-                                      text=Text.startMessage.format(message.chat.first_name),
-                                      parse_mode="HTML", reply_markup=Markup.mainMarkup)
+        await self.send_message(chat_id=message.chat.id,
+                                text=Text.responseCommitMessage.format(message.chat.first_name),
+                                parse_mode="HTML")
+        await self.send_message(chat_id=message.chat.id,
+                                text=Text.startMessage.format(message.chat.first_name),
+                                parse_mode="HTML", reply_markup=Markup.mainMarkup)
         await state.clear()  # очищение State
 
     async def __unknownMessageHandler(self, message: Message) -> None:
         # Ответ ↓
-        await self.__bot.send_message(chat_id=message.chat.id,
-                                      text=Text.unknownMessage.format(message.chat.first_name, message.text),
-                                      parse_mode="HTML")
+        await self.send_message(chat_id=message.chat.id,
+                                text=Text.unknownMessage.format(message.chat.first_name, message.text),
+                                parse_mode="HTML")
 
     async def __unsubscribedMessageHandler(self, message: Message) -> None:
         """
@@ -393,9 +381,9 @@ class SchetczeBot:
         :return: NoneType
         """
 
-        await self.__bot.send_message(chat_id=message.chat.id,
-                                      text=Text.unsubscribedMessage.format(message.chat.first_name),
-                                      parse_mode="HTML", reply_markup=Markup.subscribeMarkup)
+        await self.send_message(chat_id=message.chat.id,
+                                text=Text.unsubscribedMessage.format(message.chat.first_name),
+                                parse_mode="HTML", reply_markup=Markup.subscribeMarkup)
 
     async def __unregisteredMessageHandler(self, message: Message) -> None:
         """
@@ -403,12 +391,7 @@ class SchetczeBot:
         :param message: aiogram.types.Message
         :return: NoneType
         """
-        await self.__bot.send_message(chat_id=message.chat.id,
-                                      text=Text.unregisteredMessage.format(message.chat.first_name),
-                                      parse_mode="HTML")
+        await self.send_message(chat_id=message.chat.id,
+                                text=Text.unregisteredMessage.format(message.chat.first_name),
+                                parse_mode="HTML")
     # ------------------------------------------------------- #
-
-
-
-
-
