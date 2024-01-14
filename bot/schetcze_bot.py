@@ -54,6 +54,13 @@ class SchetczeBot:
                                                   RegistrationFilter(users=self.__users))
         self.__logger.info(Text.buttonHandlerConnectedLog.format(Text.responseButton[1]))
 
+        # Подключение хэндлера кнопки info
+        self.__dispatcher.callback_query.register(self.__infoCallbackHandler,
+                                                  F.data == Text.infoButton[1],
+                                                  SubscriptionFilter(bot=self.__bot, chatID=Text.channel_id),
+                                                  RegistrationFilter(users=self.__users))
+        self.__logger.info(Text.buttonHandlerConnectedLog.format(Text.infoButton[1]))
+
         # Подключение хэндлера кнопки cancellation
         self.__dispatcher.callback_query.register(self.__cancellationCallbackHandler,
                                                   F.data == Text.cancellationButton[1],
@@ -261,7 +268,7 @@ class SchetczeBot:
         # Ответ ↓
         await self.__bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
                                            text=Text.responseMessage.format(call.message.chat.first_name),
-                                           parse_mode="HTML", reply_markup=Markup.responseMarkup)
+                                           parse_mode="HTML", reply_markup=Markup.cancellationMarkup)
 
         await state.set_state(States.responseState)  # активация responseState
         # Добавление значения сообщения для дальнейшего изменения ↓
@@ -276,6 +283,11 @@ class SchetczeBot:
         await self.__bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
                                            text=Text.startMessage.format(call.message.chat.first_name),
                                            parse_mode="HTML", reply_markup=Markup.mainMarkup)
+
+    async def __infoCallbackHandler(self, call: CallbackQuery) -> None:
+        await self.__bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
+                                           text=Text.infoMessage, parse_mode="HTML",
+                                           reply_markup=Markup.cancellationMarkup)
 
     async def __unsubscribedCallbackHandler(self, call: Message) -> None:
         """
