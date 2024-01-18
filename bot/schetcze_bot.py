@@ -160,6 +160,7 @@ class SchetczeBot(Bot):
         cls.__auth = AuthorizationTable()  # заполнение поля класса __auth
         cls.__users = UsersTable()  # заполнение поля класса __users
         cls.__dispatcher = Dispatcher()  # заполнение поля класса __dispatcher
+
     # ---------------------------------------------- #
 
     # ---------- Метод-запуск бота SchetczeBot ---------- #
@@ -232,6 +233,17 @@ class SchetczeBot(Bot):
 
         contribution = int(call.data[8:]) * 100  # получение размера взноса из callback.data
 
+        # Генерация объекта provider_data, который требует Ю-касса ↓
+        receipt = {
+            "receipt": {"items": [
+                {
+                    "description": Text.contributionInvoiceButton["label"],
+                    "quantity": "1.00",
+                    "amount": {"value": format(contribution / 100, ".2f"), "currency": Text.contributionInvoiceButton["currency"]},
+                    "vat_code": 1
+                }
+            ]}
+        }
         # Удаление прошлого сообщения; отправка запроса на оплату ↓
         await self.delete_message(chat_id=call.message.chat.id, message_id=call.message.message_id)
         await self.send_invoice(chat_id=call.message.chat.id, title=Text.contributionInvoiceButton["title"],
@@ -239,9 +251,11 @@ class SchetczeBot(Bot):
                                 payload=Text.contributionInvoiceButton["payload"],
                                 provider_token=self.__auth.getPaymentToken(),
                                 currency=Text.contributionInvoiceButton["currency"], need_email=True,
-                                need_phone_number=True,
+                                need_phone_number=True, send_email_to_provider=True, send_phone_number_to_provider=True,
                                 prices=[LabeledPrice(label=Text.contributionInvoiceButton["label"],
-                                                     amount=contribution)])
+                                                     amount=contribution)],
+                                provider_data=dumps(receipt))
+        # provider_data=)
 
     async def __responseCallbackHandler(self, call: CallbackQuery, state: FSMContext) -> None:
         """
