@@ -12,9 +12,14 @@ class UsersTable(Table):
     # ---------- Поля и свойства класса Authorization --------- #
     TELEGRAM_ID = "Telegram_ID"
     TELEGRAM_USERNAME = "Telegram_username"
+
+    BALANCE = "Balance"
     EMAIL = "Email"
     PHONE_NUMBER = "Phone_number"
-    CONTRIBUTION = "Contribution"
+
+    BS_ID = "BS_ID"  # -> BrawlStars
+    BS_USERNAME = "BS_username"  # -> BrawlStars
+
     RESPONSES = "Responses"
     # --------------------------------------------------------- #
 
@@ -32,16 +37,18 @@ class UsersTable(Table):
     # --------------------------------------------------- #
 
     # ---------- Переопределенные методы Table ---------- #
-    def fillingTheTable(self, telegramID: int, telegramUsername: str | None) -> None:
+    def fillingTheTable(self, telegramID: int, telegramUsername: str | None, BSID: str, BSUsername: str) -> None:
         """
         Переопределенный метод Table, заполняющий таблицу Users
         :param telegramID: Идентификационный код пользователя Telegram
         :param telegramUsername: Имя пользователя Telegram
+        :param BSID: Идентификационный код игрока BrawlStars
+        :param BSUsername: Имя игрока BrawlStars
         :return: NoneType
         """
         # Добавление нового пользователя в базу данных ↓
-        self._cursor.execute(f"INSERT INTO {self._tableName} VALUES (?,?,?,?,?,?)",
-                             (telegramID, telegramUsername, None, None, 0, dumps([])))
+        self._cursor.execute(f"INSERT INTO {self._tableName} VALUES (?,?,?,?,?,?,?,?)",
+                             (telegramID, telegramUsername, 0, None, None, BSUsername, BSID, dumps([])))
         self._connection.commit()  # сохранение изменений
 
         # Логирование ↓

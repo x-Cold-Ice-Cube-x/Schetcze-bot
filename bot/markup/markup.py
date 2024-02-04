@@ -4,13 +4,18 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # ---------- Импорты из проекта ---------- #
 from configs.text import Text
+
+
 # ---------------------------------------- #
 
 
 class Markup:
     # ---------- Поля класса Markup: кнопки ---------- #
-    __contributionButton = InlineKeyboardButton(text=Text.contributionButton[0],
-                                                callback_data=Text.contributionButton[1])
+    __registrationButton = InlineKeyboardButton(text=Text.registrationButton[0],
+                                                callback_data=Text.registrationButton[1])
+    __balanceIncreasingButton = InlineKeyboardButton(text=Text.balanceIncreasingButton[0],
+                                                     callback_data=Text.balanceIncreasingButton[1])
+    __profileButton = InlineKeyboardButton(text=Text.profileButton[0], callback_data=Text.profileButton[1])
     __infoButton = InlineKeyboardButton(text=Text.infoButton[0], callback_data=Text.infoButton[1])
     __donationButton = InlineKeyboardButton(text=Text.donationButton[0], url=Text.donationButton[1])
     __responseButton = InlineKeyboardButton(text=Text.responseButton[0], callback_data=Text.responseButton[1])
@@ -25,7 +30,11 @@ class Markup:
     # ------------------------------------------------ #
 
     # ---------- Поля класса Markup: разметки ---------- #
-    __mainKeyboard = [[__infoButton], [__contributionButton, __donationButton], [__responseButton, __youtubeButton]]
+    __registrationKeyboard = [[__registrationButton]]
+
+    __mainKeyboard = [[__profileButton], [__balanceIncreasingButton, __responseButton],
+                      [__donationButton, __youtubeButton], [__infoButton]]
+    __profileKeyboard = [[__cancellationButton], [__registrationButton]]
     __cancellationKeyboard = [[__cancellationButton]]
     __subscribeKeyboard = [[__subscribeButton]]
     __contributionKeyboard = [[__paymentButtons[0], __paymentButtons[1]], [__paymentButtons[2], __paymentButtons[3]],
@@ -33,7 +42,10 @@ class Markup:
     # -------------------------------------------------- #
 
     # ---------- Поля класса Markup: клавиатуры ---------- #
+    registrationMarkup = InlineKeyboardMarkup(inline_keyboard=__registrationKeyboard)
+
     mainMarkup = InlineKeyboardMarkup(inline_keyboard=__mainKeyboard)
+    profileMarkup = InlineKeyboardMarkup(inline_keyboard=__profileKeyboard)
     cancellationMarkup = InlineKeyboardMarkup(inline_keyboard=__cancellationKeyboard)
     subscribeMarkup = InlineKeyboardMarkup(inline_keyboard=__subscribeKeyboard)
     contributionMarkup = InlineKeyboardMarkup(inline_keyboard=__contributionKeyboard)

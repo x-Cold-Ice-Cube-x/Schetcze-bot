@@ -122,7 +122,7 @@ class Table(ABC):
         """
 
         # Удаление строки из таблицы ↓
-        self._cursor.execute(f"DELETE * FROM {self._tableName} WHERE {self.__searchColumn} = '{lineData}'")
+        self._cursor.execute(f"DELETE FROM {self._tableName} WHERE {self.__searchColumn} = '{lineData}'")
         self._connection.commit()  # сохранение изменений
 
     # ------------------------------------------------------ #
