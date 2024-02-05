@@ -58,7 +58,7 @@ class Table(ABC):
         """
 
         # Запрос в базу данных ↓
-        self._cursor.execute(f"SELECT {columnName} FROM {self._tableName} WHERE {self.__searchColumn} = {lineData}")
+        self._cursor.execute(f"SELECT {columnName} FROM {self._tableName} WHERE {self.__searchColumn} = '{lineData}'")
         return self._cursor.fetchone()[0]  # возвращение одного объекта
 
     def getDataFromColumn(self, columnName: str) -> list[object]:
@@ -79,7 +79,7 @@ class Table(ABC):
         """
 
         # Запрос в базу данных ↓
-        self._cursor.execute(f"SELECT * FROM {self._tableName} WHERE {self.__searchColumn} = {lineData}")
+        self._cursor.execute(f"SELECT * FROM {self._tableName} WHERE {self.__searchColumn} = '{lineData}'")
         return [data for data in self._cursor.fetchone()]  # возвращение списка объектов
 
     def exportToExcel(self, filepath: str) -> None:

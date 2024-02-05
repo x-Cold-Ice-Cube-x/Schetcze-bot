@@ -43,10 +43,22 @@ class Markup:
 
     # ---------- Поля класса Markup: клавиатуры ---------- #
     registrationMarkup = InlineKeyboardMarkup(inline_keyboard=__registrationKeyboard)
-
     mainMarkup = InlineKeyboardMarkup(inline_keyboard=__mainKeyboard)
     profileMarkup = InlineKeyboardMarkup(inline_keyboard=__profileKeyboard)
     cancellationMarkup = InlineKeyboardMarkup(inline_keyboard=__cancellationKeyboard)
     subscribeMarkup = InlineKeyboardMarkup(inline_keyboard=__subscribeKeyboard)
     contributionMarkup = InlineKeyboardMarkup(inline_keyboard=__contributionKeyboard)
+
     # ----------------------------------------------------- #
+    @classmethod
+    def getParticipationMarkup(cls, datetime: str) -> InlineKeyboardMarkup:
+        """
+        Метод класса Markup, отвечающий за получение клавиатуры participationMarkup
+        :param datetime: Дата и время турнира (идентификационный столбец)
+        :return: aiogram.types.InlineKeyboardMarkup
+        """
+
+        # Создание и возвращение клавиатуры ↓
+        return InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=Text.participationButton[0],
+                                  callback_data=f"{Text.participationButton[1]}_{datetime}")]])

@@ -16,6 +16,7 @@ from aiogram.fsm.context import FSMContext
 # ---------- Импорты из проекта ---------- #
 from tables.authorization_table import AuthorizationTable
 from tables.users_table import UsersTable
+from tables.tournaments_table import TournamentsTable
 from configs.text import Text
 from bot.markup.markup import Markup
 from bot.filters.registration_filter import RegistrationFilter
@@ -31,6 +32,7 @@ class SchetczeBot(Bot):
     # ---------- Поля класса SchetczeBot ---------- #
     __auth = None  # тип: AuthorizationTable (обеспечить единственность объекта)
     __users = None  # тип: UsersTable (обеспечить единственность объекта)
+    __tournaments = None  # тип: TournamentsTable (обеспечить единственность объекта)
     __dispatcher = None  # тип: aiogram.Dispatcher (обеспечить единственность объекта)
     __logger = getLogger("botLogger")  # тип: logging.Logger (обеспечить единственность объекта)
 
@@ -46,6 +48,13 @@ class SchetczeBot(Bot):
         self.__dispatcher.message.register(self.__startCommandHandler, CommandStart(),
                                            SubscriptionFilter(bot=self, chatID=Text.channel_id))
         self.__logger.info(Text.commandHandlerConnectedLog.format(Text.startCommand))
+
+        # Подключение хэндлера команды /tournament.create ↓
+        self.__dispatcher.message.register(self.__createTournamentCommandHandler, Command(Text.createCommand),
+                                           SubscriptionFilter(bot=self, chatID=Text.channel_id),
+                                           RegistrationFilter(users=self.__users),
+                                           AdminFilter())
+        self.__logger.info(Text.commandHandlerConnectedLog.format(Text.createCommand))
 
         # Подключение хэндлера кнопки registration ↓
         self.__dispatcher.callback_query.register(self.__registrationCallbackHandler,
@@ -80,6 +89,13 @@ class SchetczeBot(Bot):
                                                   SubscriptionFilter(bot=self, chatID=Text.channel_id),
                                                   RegistrationFilter(users=self.__users))
         self.__logger.info(Text.buttonHandlerConnectedLog.format(Text.paymentButtonType + " type"))
+
+        # Подключение хэндлера кнопок participationType
+        self.__dispatcher.callback_query.register(self.__participationCallbackHandler,
+                                                  F.data.startswith(Text.participationButtonType),
+                                                  SubscriptionFilter(bot=self, chatID=Text.channel_id),
+                                                  RegistrationFilter(users=self.__users))
+        self.__logger.info(Text.buttonHandlerConnectedLog.format(Text.participationButtonType + " type"))
 
         # Подключение хэндлера готовности contribution платежа ↓
         self.__dispatcher.pre_checkout_query.register(self.__balancePreCheckoutHandler,
@@ -121,6 +137,7 @@ class SchetczeBot(Bot):
 
         cls.__auth = AuthorizationTable()  # заполнение поля класса __auth
         cls.__users = UsersTable()  # заполнение поля класса __users
+        cls.__tournaments = TournamentsTable()  # заполнение поля класса __tournaments
         cls.__dispatcher = Dispatcher()  # заполнение поля класса __dispatcher
 
     # ---------------------------------------------- #
@@ -173,9 +190,49 @@ class SchetczeBot(Bot):
 
         # Ответ ↓
         await self.send_document(chat_id=message.chat.id, document=FSInputFile(Text.logsFilepath))
+
+    async def __createTournamentCommandHandler(self, message: Message, command: CommandObject):
+        args = command.args.split()  # получение аргументов команды
+        print(args)
+        self.__tournaments.fillingTheTable(datetime=args[0], contribution=int(args[1]))  # создание информации о турнире
+
+        # Получение информации о турнире (нет порядкового номера турнира) ↓
+        data = self.__tournaments.getDataFromLine(lineData=args[0])
+
+        # Отправка сообщения participationMessage всем зарегистрированным пользователям ↓
+        for telegramID in self.__users.getDataFromColumn(columnName=self.__users.TELEGRAM_ID):
+            chat = await self.get_chat(chat_id=int(telegramID))  # получение чата с пользователем
+            # Отправка сообщения participationMessage ↓
+            await self.send_message(chat_id=chat.id, text=Text.participationOfferMessage.format(chat.first_name, data[0],
+                                                                                                data[1], data[2]),
+                                    parse_mode="HTML",
+                                    reply_markup=Markup.getParticipationMarkup(datetime=str(data[1])))
     # --------------------------------------------------------- #
 
     # ---------- Хэндлеры бота SchetczeBot: CallbackQuery --------- #
+    async def __participationCallbackHandler(self, call: CallbackQuery):
+        datetime = call.data[14::]  # идентификатор турнира
+        tournament = self.__tournaments.getDataFromLine(lineData=datetime)  # получение всех данных о турнире
+
+        # Назначение переменных, отвечающих за баланс пользователя и размер взноса на турнир ↓
+        balance = int(self.__users.getDataFromField(lineData=call.message.chat.id, columnName=self.__users.BALANCE))
+        contribution = int(tournament[2])
+
+        # Если баланс игрока больше взноса на турнир
+        if balance >= contribution:
+            # Добавление пользователя в члены турнира и списание взноса ↓
+            self.__tournaments.addMember(datetime=datetime, telegramID=call.message.chat.id)
+            await self.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
+                                         text=Text.successfulParticipationMessage.format(call.message.chat.first_name,
+                                                                                         contribution),
+                                         parse_mode="HTML")
+            self.__users.updateField(lineData=call.message.chat.id, columnName=self.__users.BALANCE,
+                                     field=balance - contribution)
+        else:
+            await self.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
+                                         text=Text.participationExceptionMessage.format(call.message.chat.first_name,
+                                                                                        contribution - balance),
+                                         parse_mode="HTML")
 
     async def __registrationCallbackHandler(self, call: CallbackQuery, state: FSMContext):
         await self.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,

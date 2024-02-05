@@ -1,7 +1,3 @@
-# --------- Импорты встроенных библиотек --------- #
-from json import dumps
-# ------------------------------------------------ #
-
 # ---------- Импорты из проекта ---------- #
 from tables.table import Table
 from configs.text import Text
@@ -26,7 +22,7 @@ class UsersTable(Table):
     # ---------- Конструктор класса UsersTable ---------- #
     def __init__(self):
         """
-        Конструктор класса Users: выполнение конструктора класса-родителя
+        Конструктор класса UsersTable: выполнение конструктора класса-родителя
         """
 
         # Определение необходимых полей, для корректной работы методов экспорта и импорта ↓
@@ -48,10 +44,11 @@ class UsersTable(Table):
         """
         # Добавление нового пользователя в базу данных ↓
         self._cursor.execute(f"INSERT INTO {self._tableName} VALUES (?,?,?,?,?,?,?,?)",
-                             (telegramID, telegramUsername, 0, None, None, BSUsername, BSID, dumps([])))
+                             (telegramID, telegramUsername, 0, None, None, BSUsername, BSID, "[]"))
         self._connection.commit()  # сохранение изменений
 
         # Логирование ↓
         self._logger.info(Text.fillingTheTableUsersLog.format(self._tableName, self.TELEGRAM_ID, telegramID,
-                                                              self.TELEGRAM_USERNAME, telegramUsername))
+                                                              self.TELEGRAM_USERNAME, telegramUsername,
+                                                              self.BS_USERNAME, BSUsername, self.BS_ID, BSID))
     # ---------------------------------------------------- #
