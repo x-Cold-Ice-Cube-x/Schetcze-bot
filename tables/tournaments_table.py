@@ -13,6 +13,7 @@ class TournamentsTable(Table):
     SEQUENCE_NUMBER = "Sequence_number"
     DATETIME = "Datetime"
     CONTRIBUTION = "Contribution"
+    PARTICIPATION = "Participation"
     MEMBERS = "Members"
     # -------------------------------------------------- #
 
@@ -37,8 +38,8 @@ class TournamentsTable(Table):
 
         # Заполнение необходимых для реализации турнира данных ↓
         self._cursor.execute(f"INSERT INTO {self._tableName} "
-                             f"({self.DATETIME}, {self.CONTRIBUTION}, {self.MEMBERS}) VALUES (?,?,?)",
-                             (datetime, contribution, "[]"))
+                             f"({self.DATETIME}, {self.CONTRIBUTION}, {self.PARTICIPATION}, {self.MEMBERS}) VALUES (?,?,?,?)",
+                             (datetime, contribution, 1, "[]"))
         self._connection.commit()  # сохранение изменений
 
         # Логирование ↓

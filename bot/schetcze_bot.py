@@ -2,6 +2,7 @@
 from os import remove
 from json import loads, dumps
 from logging import getLogger, INFO, basicConfig
+from datetime import datetime
 # ------------------------------------------------ #
 
 
@@ -49,12 +50,26 @@ class SchetczeBot(Bot):
                                            SubscriptionFilter(bot=self, chatID=Text.channel_id))
         self.__logger.info(Text.commandHandlerConnectedLog.format(Text.startCommand))
 
-        # Подключение хэндлера команды /tournament.create ↓
-        self.__dispatcher.message.register(self.__createTournamentCommandHandler, Command(Text.createCommand),
+        # Подключение хэндлера команды /tournament_create ↓
+        self.__dispatcher.message.register(self.__createTournamentCommandHandler, Command(Text.createTournamentCommand),
                                            SubscriptionFilter(bot=self, chatID=Text.channel_id),
                                            RegistrationFilter(users=self.__users),
                                            AdminFilter())
-        self.__logger.info(Text.commandHandlerConnectedLog.format(Text.createCommand))
+        self.__logger.info(Text.commandHandlerConnectedLog.format(Text.createTournamentCommand))
+
+        # Подключение хэндлера команды /tournament_start ↓
+        self.__dispatcher.message.register(self.__startTournamentCommandHandler, Command(Text.startTournamentCommand),
+                                           SubscriptionFilter(bot=self, chatID=Text.channel_id),
+                                           RegistrationFilter(users=self.__users),
+                                           AdminFilter())
+        self.__logger.info(Text.commandHandlerConnectedLog.format(Text.startTournamentCommand))
+
+        # Подключение хэндлера команды /tournament_close ↓
+        self.__dispatcher.message.register(self.__closeTournamentCommandHandler, Command(Text.closeTournamentCommand),
+                                           SubscriptionFilter(bot=self, chatID=Text.channel_id),
+                                           RegistrationFilter(users=self.__users),
+                                           AdminFilter())
+        self.__logger.info(Text.commandHandlerConnectedLog.format(Text.closeTournamentCommand))
 
         # Подключение хэндлера кнопки registration ↓
         self.__dispatcher.callback_query.register(self.__registrationCallbackHandler,
@@ -109,7 +124,7 @@ class SchetczeBot(Bot):
         self.__logger.info(Text.successfulPaymentHandlerConnectedLog.format(Text.balanceInvoiceButton["payload"]))
 
         # Подключение механизма регистрации пользователя ↓
-        self.__dispatcher.message.register(self.__registrationMessageHandler,
+        self.__dispatcher.message.register(self.__registrationMessageHandler, States.registrationState,
                                            SubscriptionFilter(bot=self, chatID=Text.channel_id))
         self.__logger.info(Text.registrationMessageHandlerConnectedLog)
 
@@ -191,28 +206,126 @@ class SchetczeBot(Bot):
         # Ответ ↓
         await self.send_document(chat_id=message.chat.id, document=FSInputFile(Text.logsFilepath))
 
-    async def __createTournamentCommandHandler(self, message: Message, command: CommandObject):
+    async def __createTournamentCommandHandler(self, message: Message, command: CommandObject) -> None:
+        """
+        Метод-хэндлер: обработка команды /tournament_create
+        :param message: aiogram.types.Message
+        :param command: aiogram.filters.CommandObject
+        :return: NoneType
+        """
+
+        # Проверка на дурака: есть ли аргументы к команде в нужном количестве, если дата адекватная ↓
+        if (command.args is None or len(command.args.split()) != 2
+                or datetime.strptime(command.args.split()[0], "%d.%m.%Y:%H:%M").timestamp()
+                < datetime.now().timestamp()):
+            # Отправка админу сообщения createTournamentCommandExceptionMessage ↓
+            await self.send_message(chat_id=message.chat.id,
+                                    text=Text.createTournamentCommandExceptionMessage.format(message.chat.first_name),
+                                    parse_mode="HTML")
+            return
+
+        # Проверка можно ли преобразовать второй аргумент в целочисленный тип данных ↓
+        try:
+            args = command.args.split()  # получение аргументов команды
+            self.__tournaments.fillingTheTable(datetime=args[0], contribution=int(args[1]))  # создание информации
+
+            # Получение информации о турнире (нет порядкового номера турнира) ↓
+            data = self.__tournaments.getDataFromLine(lineData=args[0])
+
+            # Отправка сообщения participationMessage всем зарегистрированным пользователям ↓
+            for telegramID in self.__users.getDataFromColumn(columnName=self.__users.TELEGRAM_ID):
+                chat = await self.get_chat(chat_id=int(telegramID))  # получение чата с пользователем
+                # Отправка сообщения participationMessage ↓
+                await self.send_message(chat_id=chat.id, text=Text.participationOfferMessage.format(chat.first_name,
+                                                                                                    data[0], data[1],
+                                                                                                    data[2]),
+                                        parse_mode="HTML",
+                                        reply_markup=Markup.getParticipationMarkup(datetime=str(data[1])))
+        except ValueError:
+            # Отправка админу сообщения createTournamentCommandExceptionMessage ↓
+            await self.send_message(chat_id=message.chat.id,
+                                    text=Text.createTournamentCommandExceptionMessage.format(message.chat.first_name),
+                                    parse_mode="HTML")
+
+    async def __startTournamentCommandHandler(self, message: Message, command: CommandObject) -> None:
+        """
+        Метод-хэндлер: обработка команды /tournament_start
+        :param message: aiogram.types.Message
+        :param command: aiogram.filters.CommandObject
+        :return: NoneType
+        """
+
+        # Проверка на дурака: есть ли аргументы к команде в нужном количестве, если турнир существует в базе данных
+        if (command.args is None or len(command.args.split()) != 2
+                or self.__tournaments.getDataFromLine(lineData=command.args.split()[0]) is None):
+            # Отправка админу сообщения startTournamentCommandExceptionMessage ↓
+            await self.send_message(chat_id=message.chat.id,
+                                    text=Text.startTournamentCommandExceptionMessage.format(message.chat.first_name),
+                                    parse_mode="HTML")
+            return
+
         args = command.args.split()  # получение аргументов команды
-        print(args)
-        self.__tournaments.fillingTheTable(datetime=args[0], contribution=int(args[1]))  # создание информации о турнире
 
-        # Получение информации о турнире (нет порядкового номера турнира) ↓
-        data = self.__tournaments.getDataFromLine(lineData=args[0])
+        # Отправка каждому участнику турнира сообщение startTournamentMessage ↓
+        for memberID in self.__tournaments.getMembers(args[0]):
+            chat = await self.get_chat(memberID)
+            await self.send_message(chat_id=chat.id, text=Text.startTournamentMessage.format(chat.first_name, args[1]),
+                                    parse_mode="HTML")
+        # Закрытие регистрации на турнир ↓
+        self.__tournaments.updateField(lineData=args[0], columnName=self.__tournaments.PARTICIPATION, field=0)
 
-        # Отправка сообщения participationMessage всем зарегистрированным пользователям ↓
-        for telegramID in self.__users.getDataFromColumn(columnName=self.__users.TELEGRAM_ID):
-            chat = await self.get_chat(chat_id=int(telegramID))  # получение чата с пользователем
-            # Отправка сообщения participationMessage ↓
-            await self.send_message(chat_id=chat.id, text=Text.participationOfferMessage.format(chat.first_name, data[0],
-                                                                                                data[1], data[2]),
-                                    parse_mode="HTML",
-                                    reply_markup=Markup.getParticipationMarkup(datetime=str(data[1])))
+    async def __closeTournamentCommandHandler(self, message: Message, command: CommandObject) -> None:
+        """
+        Метод-хэндлер: обработка команды /tournament_close
+        :param message: aiogram.types.Message
+        :param command: aiogram.filters.CommandObject
+        :return: NoneType
+        """
+
+        # Проверка на дурака: есть ли аргументы к команде в нужном количестве, если турнир существует в базе данных
+        if (command.args is None or len(command.args.split()) != 1
+                or self.__tournaments.getDataFromLine(lineData=command.args.split()[0]) is None):
+            # Отправка админу сообщения closeTournamentCommandExceptionMessage ↓
+            await self.send_message(chat_id=message.chat.id,
+                                    text=Text.closeTournamentCommandExceptionMessage.format(message.chat.first_name),
+                                    parse_mode="HTML")
+            return
+
+        args = command.args.split()  # получение аргументов команды
+        # Получение значения взноса турнира ↓
+        contribution = int(self.__tournaments.getDataFromField(lineData=args[0],
+                                                               columnName=self.__tournaments.CONTRIBUTION))
+        # Отправка каждому участнику турнира сообщение closeTournamentMessage; возвращение взноса на баланс ↓
+        for memberID in self.__tournaments.getMembers(datetime=args[0]):
+            chat = await self.get_chat(memberID)
+            balance = int(self.__users.getDataFromField(lineData=chat.id, columnName=self.__users.BALANCE))
+
+            self.__users.updateField(lineData=memberID, columnName=self.__users.BALANCE, field=balance + contribution)
+            await self.send_message(chat_id=chat.id,
+                                    text=Text.closeTournamentMessage.format(message.chat.first_name, args[0],
+                                                                            contribution),
+                                    parse_mode="HTML")
+
+        self.__tournaments.removeLine(lineData=args[0])  # удаление турнира из базы данных
     # --------------------------------------------------------- #
 
     # ---------- Хэндлеры бота SchetczeBot: CallbackQuery --------- #
-    async def __participationCallbackHandler(self, call: CallbackQuery):
-        datetime = call.data[14::]  # идентификатор турнира
-        tournament = self.__tournaments.getDataFromLine(lineData=datetime)  # получение всех данных о турнире
+    async def __participationCallbackHandler(self, call: CallbackQuery) -> None:
+        """
+        Метод-хэндлер: обработка кнопок типа participation
+        :param call: aiogram.types.CallbackQuery
+        :return: NoneType
+        """
+
+        tournamentDatetime = call.data[14::]  # получение идентификатора турнира
+        tournament = self.__tournaments.getDataFromLine(lineData=tournamentDatetime)  # получение всех данных о турнире
+        # Проверка: открыта ли регистрация на турнир (0 - закрыта) ↓
+        if tournament[3] == 0:
+            # Отправка пользователю сообщения participationExceptionMessage_1 ↓
+            await self.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
+                                         text=Text.participationExceptionMessage_1.format(call.message.chat.first_name),
+                                         parse_mode="HTML")
+            return
 
         # Назначение переменных, отвечающих за баланс пользователя и размер взноса на турнир ↓
         balance = int(self.__users.getDataFromField(lineData=call.message.chat.id, columnName=self.__users.BALANCE))
@@ -220,8 +333,8 @@ class SchetczeBot(Bot):
 
         # Если баланс игрока больше взноса на турнир
         if balance >= contribution:
-            # Добавление пользователя в члены турнира и списание взноса ↓
-            self.__tournaments.addMember(datetime=datetime, telegramID=call.message.chat.id)
+            # Добавление пользователя турнир и списание взноса, отправка сообщения successfulParticipationMessage ↓
+            self.__tournaments.addMember(datetime=tournamentDatetime, telegramID=call.message.chat.id)
             await self.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
                                          text=Text.successfulParticipationMessage.format(call.message.chat.first_name,
                                                                                          contribution),
@@ -229,23 +342,39 @@ class SchetczeBot(Bot):
             self.__users.updateField(lineData=call.message.chat.id, columnName=self.__users.BALANCE,
                                      field=balance - contribution)
         else:
+            # Отправка пользователю сообщения participationExceptionMessage_0 ↓
             await self.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
-                                         text=Text.participationExceptionMessage.format(call.message.chat.first_name,
-                                                                                        contribution - balance),
-                                         parse_mode="HTML")
+                                         text=Text.participationExceptionMessage_0.format(call.message.chat.first_name,
+                                                                                          contribution - balance),
+                                         parse_mode="HTML", reply_markup=call.message.reply_markup)
 
-    async def __registrationCallbackHandler(self, call: CallbackQuery, state: FSMContext):
+    async def __registrationCallbackHandler(self, call: CallbackQuery, state: FSMContext) -> None:
+        """
+        Метод-хэндлер: обработка кнопки registration
+        :param call: aiogram.types.CallbackQuery
+        :param state: aiogram.fsm.context.FSMContext
+        :return: NoneType
+        """
+
+        # Отправка пользователю сообщение registrationMessage ↓
         await self.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
                                      text=Text.registrationMessage.format(call.message.chat.first_name),
                                      parse_mode="HTML")
 
         await state.set_state(States.registrationState)  # активация registrationState
-        # Добавление значения сообщения для дальнейшего изменения ↓
+
+        # Передача message_id для дальнейшего изменения ↓
         await state.update_data({"message_id": call.message.message_id})
 
-    async def __profileCallbackHandler(self, call: CallbackQuery):
+    async def __profileCallbackHandler(self, call: CallbackQuery) -> None:
+        """
+        Метод-хэндлер: обработка кнопки profile
+        :param call: aiogram.types.CallbackQuery
+        :return: NoneType
+        """
+
         userData = self.__users.getDataFromLine(lineData=call.message.chat.id)  # получение информации о пользователе
-        # Отправка сообщения ↓
+        # Отправка сообщения profileMessage ↓
         await self.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
                                      text=Text.profileMessage.format(call.message.chat.first_name,
                                                                      userData[2], userData[5],
@@ -258,6 +387,7 @@ class SchetczeBot(Bot):
         :param call: aiogram.types.CallbackQuery
         :return: NoneType
         """
+
         # Ответ ↓
         await self.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
                                      text=Text.balanceIncreasingMessage.format(call.message.chat.first_name),
@@ -444,7 +574,7 @@ class SchetczeBot(Bot):
                                 text=Text.responseCommitMessage.format(message.chat.first_name),
                                 parse_mode="HTML")
         await self.send_message(chat_id=message.chat.id,
-                                text=Text.startMessage.format(message.chat.first_name),
+                                text=Text.startMessage_1.format(message.chat.first_name),
                                 parse_mode="HTML", reply_markup=Markup.mainMarkup)
         await state.clear()
 
