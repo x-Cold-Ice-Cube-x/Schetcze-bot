@@ -215,9 +215,10 @@ class SchetczeBot(Bot):
         """
 
         # Проверка на дурака: есть ли аргументы к команде в нужном количестве, если дата адекватная ↓
-        if (command.args is None or len(command.args.split()) != 2
+        if (command.args is None or len(command.args.split()) != 3
                 or datetime.strptime(command.args.split()[0], "%d.%m.%Y:%H:%M").timestamp()
-                < datetime.now().timestamp()):
+                < datetime.now().timestamp()
+                or command.args.split()[0] in self.__tournaments.getDataFromColumn(self.__tournaments.DATETIME)):
             # Отправка админу сообщения createTournamentCommandExceptionMessage ↓
             await self.send_message(chat_id=message.chat.id,
                                     text=Text.createTournamentCommandExceptionMessage.format(message.chat.first_name),
@@ -227,7 +228,7 @@ class SchetczeBot(Bot):
         # Проверка можно ли преобразовать второй аргумент в целочисленный тип данных ↓
         try:
             args = command.args.split()  # получение аргументов команды
-            self.__tournaments.fillingTheTable(datetime=args[0], contribution=int(args[1]))  # создание информации
+            self.__tournaments.fillingTheTable(datetime=args[0], membersCount=int(args[1]), contribution=int(args[2]))  # создание информации
 
             # Получение информации о турнире (нет порядкового номера турнира) ↓
             data = self.__tournaments.getDataFromLine(lineData=args[0])
@@ -238,7 +239,7 @@ class SchetczeBot(Bot):
                 # Отправка сообщения participationMessage ↓
                 await self.send_message(chat_id=chat.id, text=Text.participationOfferMessage.format(chat.first_name,
                                                                                                     data[0], data[1],
-                                                                                                    data[2]),
+                                                                                                    data[2], data[3]),
                                         parse_mode="HTML",
                                         reply_markup=Markup.getParticipationMarkup(datetime=str(data[1])))
         except ValueError:
@@ -329,7 +330,7 @@ class SchetczeBot(Bot):
 
         # Назначение переменных, отвечающих за баланс пользователя и размер взноса на турнир ↓
         balance = int(self.__users.getDataFromField(lineData=call.message.chat.id, columnName=self.__users.BALANCE))
-        contribution = int(tournament[2])
+        contribution = int(tournament[3])
 
         # Если баланс игрока больше взноса на турнир
         if balance >= contribution:
@@ -341,6 +342,23 @@ class SchetczeBot(Bot):
                                          parse_mode="HTML")
             self.__users.updateField(lineData=call.message.chat.id, columnName=self.__users.BALANCE,
                                      field=balance - contribution)
+
+            # Отправка админу сообщение participationNoticeMessage ↓
+            adminChat = await self.get_chat(chat_id=Text.admins_id[0])
+            await self.send_message(chat_id=adminChat.id,
+                                    text=Text.participationNoticeMessage.format(adminChat.first_name, tournamentDatetime,
+                                                                                call.message.from_user.url),
+                                    parse_mode="HTML")
+
+            # Если турнир принял максимальное количество игроков, то поменять значение столбца Participation на 0 ↓
+            if len(self.__tournaments.getMembers(datetime=tournamentDatetime)) == int(tournament[2]):
+                # Закрытие регистрации на турнир ↓
+                self.__tournaments.updateField(lineData=tournamentDatetime,
+                                               columnName=self.__tournaments.PARTICIPATION, field=0)
+                # Отправка админу сообщению о готовности ↓
+                await self.send_message(chat_id=adminChat.id,
+                                        text=Text.maxUserCountMessage.format(adminChat.first_name), parse_mode="HTML")
+
         else:
             # Отправка пользователю сообщения participationExceptionMessage_0 ↓
             await self.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
@@ -529,16 +547,35 @@ class SchetczeBot(Bot):
 
     # ---------- Хэндлер бота SchetczeBot: Message ---------- #
     async def __registrationMessageHandler(self, message: Message, state: FSMContext):
-        # Обработка перерегистрации ↓
-        if message.chat.id in self.__users.getDataFromColumn(self.__users.TELEGRAM_ID):
-            self.__users.removeLine(message.chat.id)
-
         stateData = await state.get_data()  # получение stateData (cм __registrationCallbackHandler)
         if ":" in message.text:
+            oldData = self.__users.getDataFromLine(lineData=message.chat.id)
             BSData = message.text.split(":")
-            # Регистрация пользователя ↓
-            self.__users.fillingTheTable(telegramID=message.chat.id, telegramUsername=message.chat.username,
-                                         BSID=BSData[0], BSUsername=BSData[1])
+            if oldData is None:
+                # Проверка: существует ли пользователь с таким же ником или кодом ↓
+                if (BSData[0] in self.__users.getDataFromColumn(columnName=self.__users.BS_ID)
+                        or BSData[1] in self.__users.getDataFromColumn(columnName=self.__users.BS_USERNAME)):
+                    await self.send_message(chat_id=message.chat.id,
+                                            text=Text.registrationExceptionMessage_0.format(message.chat.first_name),
+                                            parse_mode="HTML", reply_markup=Markup.registrationMarkup)
+                    return
+                # Регистрация пользователя ↓
+                self.__users.fillingTheTable(telegramID=message.chat.id, telegramUsername=message.chat.username,
+                                             balance=0, email="", phoneNumber="",
+                                             BSID=BSData[0], BSUsername=BSData[1], responses="[]")
+            else:
+                # Проверка: существует ли пользователь с таким же ником или кодом ↓
+                if (BSData[0] in self.__users.getDataFromColumn(columnName=self.__users.BS_ID)
+                        or BSData[1] in self.__users.getDataFromColumn(columnName=self.__users.BS_USERNAME)):
+                    await self.send_message(chat_id=message.chat.id,
+                                            text=Text.registrationExceptionMessage_1.format(message.chat.first_name),
+                                            parse_mode="HTML", reply_markup=Markup.mainMarkup)
+                    return
+                # Перерегистрация пользователя ↓
+                self.__users.removeLine(lineData=message.chat.id)
+                self.__users.fillingTheTable(telegramID=message.chat.id, telegramUsername=message.chat.username,
+                                             balance=int(oldData[2]), email=str(oldData[3]), phoneNumber=str(oldData[4]),
+                                             BSID=BSData[0], BSUsername=BSData[1], responses=str(oldData[7]))
 
             # Удаление прошлого сообщения и отправка successfulRegistrationMessage ↓
             await self.delete_message(chat_id=message.chat.id, message_id=stateData["message_id"])
@@ -550,7 +587,7 @@ class SchetczeBot(Bot):
         # Удаление прошлого сообщения и отправка RegistrationExceptionMessage ↓
         await self.delete_message(chat_id=message.chat.id, message_id=stateData["message_id"])
         await self.send_message(chat_id=message.chat.id,
-                                text=Text.registrationExceptionMessage.format(message.chat.first_name),
+                                text=Text.registrationExceptionMessage_0.format(message.chat.first_name),
                                 parse_mode="HTML", reply_markup=Markup.registrationMarkup)
 
         await state.clear()

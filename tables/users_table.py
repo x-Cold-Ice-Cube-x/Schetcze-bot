@@ -1,6 +1,8 @@
 # ---------- Импорты из проекта ---------- #
 from tables.table import Table
 from configs.text import Text
+
+
 # ---------------------------------------- #
 
 
@@ -17,6 +19,7 @@ class UsersTable(Table):
     BS_USERNAME = "BS_username"  # -> BrawlStars
 
     RESPONSES = "Responses"
+
     # --------------------------------------------------------- #
 
     # ---------- Конструктор класса UsersTable ---------- #
@@ -30,21 +33,28 @@ class UsersTable(Table):
 
         # Логирование ↓
         self._logger.info(Text.usersConnectedLog)
+
     # --------------------------------------------------- #
 
     # ---------- Переопределенные методы Table ---------- #
-    def fillingTheTable(self, telegramID: int, telegramUsername: str | None, BSID: str, BSUsername: str) -> None:
+    def fillingTheTable(self, telegramID: int, telegramUsername: str | None, balance: int, email: str,
+                        phoneNumber: str, BSID: str, BSUsername: str, responses: str) -> None:
         """
         Переопределенный метод Table, заполняющий таблицу Users
         :param telegramID: Идентификационный код пользователя Telegram
         :param telegramUsername: Имя пользователя Telegram
+        :param balance: Сохраненный баланс пользователя (для перерегистрации)
+        :param email: Сохраненный email пользователя (для перерегистрации)
+        :param phoneNumber: Сохраненный номер телефона пользователя (для перерегистрации)
         :param BSID: Идентификационный код игрока BrawlStars
         :param BSUsername: Имя игрока BrawlStars
+        :param responses: Сохраненные отзывы пользователя (для перерегистрации)
         :return: NoneType
         """
+
         # Добавление нового пользователя в базу данных ↓
         self._cursor.execute(f"INSERT INTO {self._tableName} VALUES (?,?,?,?,?,?,?,?)",
-                             (telegramID, telegramUsername, 0, None, None, BSUsername, BSID, "[]"))
+                             (telegramID, telegramUsername, balance, email, phoneNumber, BSUsername, BSID, responses))
         self._connection.commit()  # сохранение изменений
 
         # Логирование ↓
