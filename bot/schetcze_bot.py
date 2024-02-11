@@ -601,7 +601,6 @@ class SchetczeBot(Bot):
         self.__logger.info(Text.successfulPaymentLog.format(message.chat.first_name,
                                                             Text.balanceInvoiceButton["payload"],
                                                             int(message.successful_payment.total_amount // 100)))
-
     # ----------------------------------------------------------------- #
 
     # ---------- Хэндлер бота SchetczeBot: Message ---------- #

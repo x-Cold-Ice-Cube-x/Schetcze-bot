@@ -61,15 +61,16 @@ class Table(ABC):
         self._cursor.execute(f"SELECT {columnName} FROM {self._tableName} WHERE {self.__searchColumn} = '{lineData}'")
         return self._cursor.fetchone()[0]  # возвращение одного объекта
 
-    def getDataFromColumn(self, columnName: str) -> tuple[object]:
+    def getDataFromColumn(self, columnName: str) -> list[object]:
         """
         Метод, возвращающий содержание столбца
         :param columnName: название столбца
         :return: list[object]
         """
+
         # Запрос в базу данных ↓
         self._cursor.execute(f"SELECT {columnName} FROM {self._tableName}")
-        return self._cursor.fetchone()
+        return [data[0] for data in self._cursor.fetchall()]  # возвращение списка объектов
 
     def getDataFromLine(self, lineData) -> tuple[object] | None:
         """
