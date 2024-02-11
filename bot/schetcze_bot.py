@@ -592,7 +592,7 @@ class SchetczeBot(Bot):
                                  field=filed + int(message.successful_payment.total_amount // 100))
 
         # Генерация и отправка благодарственного сообщения ↓
-        replyMessage = Text.thankForBuyingMessage.format(message.chat.first_name)
+        replyMessage = Text.thankForBuyingMessage.format(message.chat.first_name, message.successful_payment.total_amount // 100)
         await self.send_message(chat_id=message.chat.id, text=replyMessage, parse_mode="HTML")
 
         # Отправка главного меню ↓
