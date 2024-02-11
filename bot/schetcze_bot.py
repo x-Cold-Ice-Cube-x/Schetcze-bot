@@ -2,6 +2,7 @@
 from os import remove
 from json import loads, dumps
 from logging import getLogger, INFO, basicConfig
+from datetime import datetime
 # ------------------------------------------------ #
 
 
@@ -9,13 +10,14 @@ from logging import getLogger, INFO, basicConfig
 from aiogram import Dispatcher, Bot, F
 from aiogram.types import Message, FSInputFile, CallbackQuery, LabeledPrice
 from aiogram.types.pre_checkout_query import PreCheckoutQuery
-from aiogram.filters import CommandStart, Command
+from aiogram.filters import CommandStart, Command, CommandObject
 from aiogram.fsm.context import FSMContext
 # ----------------------------------------------------- #
 
 # ---------- Импорты из проекта ---------- #
 from tables.authorization_table import AuthorizationTable
 from tables.users_table import UsersTable
+from tables.tournaments_table import TournamentsTable
 from configs.text import Text
 from bot.markup.markup import Markup
 from bot.filters.registration_filter import RegistrationFilter
@@ -31,6 +33,7 @@ class SchetczeBot(Bot):
     # ---------- Поля класса SchetczeBot ---------- #
     __auth = None  # тип: AuthorizationTable (обеспечить единственность объекта)
     __users = None  # тип: UsersTable (обеспечить единственность объекта)
+    __tournaments = None  # тип: TournamentsTable (обеспечить единственность объекта)
     __dispatcher = None  # тип: aiogram.Dispatcher (обеспечить единственность объекта)
     __logger = getLogger("botLogger")  # тип: logging.Logger (обеспечить единственность объекта)
 
@@ -42,12 +45,12 @@ class SchetczeBot(Bot):
         self.__setAttributes()  # заполнение всех полей класса
         super().__init__(token=self.__auth.getTelegramToken())  # авторизация бота в Telegram
 
-        # Подключение хэндлера кнопки contribution
-        self.__dispatcher.callback_query.register(self.__contributionCallbackHandler,
-                                                  F.data == Text.contributionButton[1],
+        # Подключение хэндлера кнопки balance
+        self.__dispatcher.callback_query.register(self.__balanceIncreasingCallbackHandler,
+                                                  F.data == Text.balanceIncreasingButton[1],
                                                   SubscriptionFilter(bot=self, chatID=Text.channel_id),
                                                   RegistrationFilter(users=self.__users))
-        self.__logger.info(Text.buttonHandlerConnectedLog.format(Text.contributionButton[1]))
+        self.__logger.info(Text.buttonHandlerConnectedLog.format(Text.balanceIncreasingButton[1]))
 
         # Подключение хэндлера кнопки response
         self.__dispatcher.callback_query.register(self.__responseCallbackHandler,
@@ -77,16 +80,16 @@ class SchetczeBot(Bot):
                                                   RegistrationFilter(users=self.__users))
         self.__logger.info(Text.buttonHandlerConnectedLog.format(Text.paymentButtonType + " type"))
 
-        # Подключение хэндлера готовности contribution платежа ↓
-        self.__dispatcher.pre_checkout_query.register(self.__contributionPreCheckoutHandler,
-                                                      F.invoice_payload == Text.contributionInvoiceButton["payload"])
-        self.__logger.info(Text.checkoutHandlerConnectedLog.format(Text.contributionInvoiceButton["payload"]))
+        # Подключение хэндлера готовности balance платежа ↓
+        self.__dispatcher.pre_checkout_query.register(self.__balancePreCheckoutHandler,
+                                                      F.invoice_payload == Text.balanceInvoiceButton["payload"])
+        self.__logger.info(Text.checkoutHandlerConnectedLog.format(Text.balanceInvoiceButton["payload"]))
 
-        # Подключение хэндлера успешной оплаты товара contribution ↓
-        self.__dispatcher.message.register(self.__contributionSuccessfulPaymentHandler,
+        # Подключение хэндлера успешной оплаты товара balance ↓
+        self.__dispatcher.message.register(self.__balanceSuccessfulPaymentHandler,
                                            F.successful_payment.invoice_payload ==
-                                           Text.contributionInvoiceButton["payload"])
-        self.__logger.info(Text.successfulPaymentHandlerConnectedLog.format(Text.contributionInvoiceButton["payload"]))
+                                           Text.balanceInvoiceButton["payload"])
+        self.__logger.info(Text.successfulPaymentHandlerConnectedLog.format(Text.balanceInvoiceButton["payload"]))
 
         # Подключение хэндлера получения и записи отзыва
         self.__dispatcher.message.register(self.__responseMessageHandler,
@@ -99,6 +102,26 @@ class SchetczeBot(Bot):
                                            SubscriptionFilter(bot=self, chatID=Text.channel_id),
                                            RegistrationFilter(users=self.__users))
         self.__logger.info(Text.responseMessageHandlerConnectedLog)
+
+        # Подключение хэндлера кнопки registration ↓
+        self.__dispatcher.callback_query.register(self.__registrationCallbackHandler,
+                                                  F.data == Text.registrationButton[1],
+                                                  SubscriptionFilter(bot=self, chatID=Text.channel_id))
+        self.__logger.info(Text.buttonHandlerConnectedLog.format(Text.registrationButton[1]))
+
+        # Подключение хэндлера кнопки profile ↓
+        self.__dispatcher.callback_query.register(self.__profileCallbackHandler,
+                                                  F.data == Text.profileButton[1],
+                                                  SubscriptionFilter(bot=self, chatID=Text.channel_id),
+                                                  RegistrationFilter(users=self.__users))
+        self.__logger.info(Text.buttonHandlerConnectedLog.format(Text.profileButton[1]))
+
+        # Подключение хэндлера кнопок participationType
+        self.__dispatcher.callback_query.register(self.__participationCallbackHandler,
+                                                  F.data.startswith(Text.participationButtonType),
+                                                  SubscriptionFilter(bot=self, chatID=Text.channel_id),
+                                                  RegistrationFilter(users=self.__users))
+        self.__logger.info(Text.buttonHandlerConnectedLog.format(Text.participationButtonType + " type"))
 
         # Подключение хэндлера команды /start ↓
         self.__dispatcher.message.register(self.__startCommandHandler, CommandStart(),
@@ -116,6 +139,32 @@ class SchetczeBot(Bot):
                                            SubscriptionFilter(bot=self, chatID=Text.channel_id),
                                            RegistrationFilter(users=self.__users), AdminFilter())
         self.__logger.info(Text.commandHandlerConnectedLog.format(Text.logsCommand))
+
+        # Подключение хэндлера команды /tournament_create ↓
+        self.__dispatcher.message.register(self.__createTournamentCommandHandler, Command(Text.createTournamentCommand),
+                                           SubscriptionFilter(bot=self, chatID=Text.channel_id),
+                                           RegistrationFilter(users=self.__users),
+                                           AdminFilter())
+        self.__logger.info(Text.commandHandlerConnectedLog.format(Text.createTournamentCommand))
+
+        # Подключение хэндлера команды /tournament_start ↓
+        self.__dispatcher.message.register(self.__startTournamentCommandHandler, Command(Text.startTournamentCommand),
+                                           SubscriptionFilter(bot=self, chatID=Text.channel_id),
+                                           RegistrationFilter(users=self.__users),
+                                           AdminFilter())
+        self.__logger.info(Text.commandHandlerConnectedLog.format(Text.startTournamentCommand))
+
+        # Подключение хэндлера команды /tournament_close ↓
+        self.__dispatcher.message.register(self.__closeTournamentCommandHandler, Command(Text.closeTournamentCommand),
+                                           SubscriptionFilter(bot=self, chatID=Text.channel_id),
+                                           RegistrationFilter(users=self.__users),
+                                           AdminFilter())
+        self.__logger.info(Text.commandHandlerConnectedLog.format(Text.closeTournamentCommand))
+
+        # Подключение хэндлера регистрации пользователя ↓
+        self.__dispatcher.message.register(self.__registrationMessageHandler, States.registrationState,
+                                           SubscriptionFilter(bot=self, chatID=Text.channel_id))
+        self.__logger.info(Text.registrationMessageHandlerConnectedLog)
 
         # Подключение хэндлера неизвестных сообщений ↓
         self.__dispatcher.message.register(self.__unknownMessageHandler,
@@ -159,6 +208,7 @@ class SchetczeBot(Bot):
 
         cls.__auth = AuthorizationTable()  # заполнение поля класса __auth
         cls.__users = UsersTable()  # заполнение поля класса __users
+        cls.__tournaments = TournamentsTable()  # заполнение поля класса __tournaments
         cls.__dispatcher = Dispatcher()  # заполнение поля класса __dispatcher
 
     # ---------------------------------------------- #
@@ -179,14 +229,16 @@ class SchetczeBot(Bot):
         :return: NoneType
         """
 
-        # Проверка существования пользователя в базе данных ↓
-        if message.chat.id not in self.__users.getDataFromColumn(columnName=self.__users.TELEGRAM_ID):
-            # Запись в таблицу Users ↓
-            self.__users.fillingTheTable(telegramID=message.chat.id, telegramUsername=message.chat.username)
+        # Если пользователь уже зарегистрирован ↓
+        if message.chat.id in self.__users.getDataFromColumn(columnName=self.__users.TELEGRAM_ID):
+            await self.send_message(chat_id=message.chat.id, text=Text.startMessage_1.format(message.chat.first_name),
+                                    parse_mode="HTML", reply_markup=Markup.mainMarkup)
+            return
 
-        # Ответ ↓
-        await self.send_message(chat_id=message.chat.id, text=Text.startMessage.format(message.chat.first_name),
-                                parse_mode="HTML", reply_markup=Markup.mainMarkup)
+        # Переадресация на меню регистрации пользователя ↓
+        await self.send_message(chat_id=message.chat.id,
+                                text=Text.startMessage_0.format(message.chat.first_name), parse_mode="HTML",
+                                reply_markup=Markup.registrationMarkup)
 
     async def __databaseCommandHandler(self, message: Message) -> None:
         """
@@ -210,18 +262,212 @@ class SchetczeBot(Bot):
         # Ответ ↓
         await self.send_document(chat_id=message.chat.id, document=FSInputFile(Text.logsFilepath))
 
+    async def __createTournamentCommandHandler(self, message: Message, command: CommandObject) -> None:
+        """
+        Метод-хэндлер: обработка команды /tournament_create
+        :param message: aiogram.types.Message
+        :param command: aiogram.filters.CommandObject
+        :return: NoneType
+        """
+
+        # Проверка на дурака: есть ли аргументы к команде в нужном количестве, если дата адекватная ↓
+        if (command.args is None or len(command.args.split()) != 3
+                or datetime.strptime(command.args.split()[0], "%d.%m.%Y:%H:%M").timestamp()
+                < datetime.now().timestamp()
+                or command.args.split()[0] in self.__tournaments.getDataFromColumn(self.__tournaments.DATETIME)):
+            # Отправка админу сообщения createTournamentCommandExceptionMessage ↓
+            await self.send_message(chat_id=message.chat.id,
+                                    text=Text.createTournamentCommandExceptionMessage.format(message.chat.first_name),
+                                    parse_mode="HTML")
+            return
+
+        # Проверка можно ли преобразовать второй аргумент в целочисленный тип данных ↓
+        try:
+            args = command.args.split()  # получение аргументов команды
+            self.__tournaments.fillingTheTable(datetime=args[0], membersCount=int(args[1]),
+                                               contribution=int(args[2]))  # создание информации
+
+            # Получение информации о турнире (нет порядкового номера турнира) ↓
+            data = self.__tournaments.getDataFromLine(lineData=args[0])
+
+            # Отправка сообщения participationMessage всем зарегистрированным пользователям ↓
+            for telegramID in self.__users.getDataFromColumn(columnName=self.__users.TELEGRAM_ID):
+                chat = await self.get_chat(chat_id=int(telegramID))  # получение чата с пользователем
+                # Отправка сообщения participationMessage ↓
+                await self.send_message(chat_id=chat.id, text=Text.participationOfferMessage.format(chat.first_name,
+                                                                                                    data[0], data[1],
+                                                                                                    data[2], data[3]),
+                                        parse_mode="HTML",
+                                        reply_markup=Markup.getParticipationMarkup(datetime=str(data[1])))
+        except ValueError:
+            # Отправка админу сообщения createTournamentCommandExceptionMessage ↓
+            await self.send_message(chat_id=message.chat.id,
+                                    text=Text.createTournamentCommandExceptionMessage.format(message.chat.first_name),
+                                    parse_mode="HTML")
+
+    async def __startTournamentCommandHandler(self, message: Message, command: CommandObject) -> None:
+        """
+        Метод-хэндлер: обработка команды /tournament_start
+        :param message: aiogram.types.Message
+        :param command: aiogram.filters.CommandObject
+        :return: NoneType
+        """
+
+        # Проверка на дурака: есть ли аргументы к команде в нужном количестве, если турнир существует в базе данных
+        if (command.args is None or len(command.args.split()) != 2
+                or self.__tournaments.getDataFromLine(lineData=command.args.split()[0]) is None):
+            # Отправка админу сообщения startTournamentCommandExceptionMessage ↓
+            await self.send_message(chat_id=message.chat.id,
+                                    text=Text.startTournamentCommandExceptionMessage.format(message.chat.first_name),
+                                    parse_mode="HTML")
+            return
+
+        args = command.args.split()  # получение аргументов команды
+
+        # Отправка каждому участнику турнира сообщение startTournamentMessage ↓
+        for memberID in self.__tournaments.getMembers(args[0]):
+            chat = await self.get_chat(memberID)
+            await self.send_message(chat_id=chat.id, text=Text.startTournamentMessage.format(chat.first_name, args[1]),
+                                    parse_mode="HTML")
+        # Закрытие регистрации на турнир ↓
+        self.__tournaments.updateField(lineData=args[0], columnName=self.__tournaments.PARTICIPATION, field=0)
+
+    async def __closeTournamentCommandHandler(self, message: Message, command: CommandObject) -> None:
+        """
+        Метод-хэндлер: обработка команды /tournament_close
+        :param message: aiogram.types.Message
+        :param command: aiogram.filters.CommandObject
+        :return: NoneType
+        """
+
+        # Проверка на дурака: есть ли аргументы к команде в нужном количестве, если турнир существует в базе данных
+        if (command.args is None or len(command.args.split()) != 1
+                or self.__tournaments.getDataFromLine(lineData=command.args.split()[0]) is None):
+            # Отправка админу сообщения closeTournamentCommandExceptionMessage ↓
+            await self.send_message(chat_id=message.chat.id,
+                                    text=Text.closeTournamentCommandExceptionMessage.format(message.chat.first_name),
+                                    parse_mode="HTML")
+            return
+
+        args = command.args.split()  # получение аргументов команды
+        # Получение значения взноса турнира ↓
+        contribution = int(self.__tournaments.getDataFromField(lineData=args[0],
+                                                               columnName=self.__tournaments.CONTRIBUTION))
+        # Отправка каждому участнику турнира сообщение closeTournamentMessage; возвращение взноса на баланс ↓
+        for memberID in self.__tournaments.getMembers(datetime=args[0]):
+            chat = await self.get_chat(memberID)
+            balance = int(self.__users.getDataFromField(lineData=chat.id, columnName=self.__users.BALANCE))
+
+            self.__users.updateField(lineData=memberID, columnName=self.__users.BALANCE, field=balance + contribution)
+            await self.send_message(chat_id=chat.id,
+                                    text=Text.closeTournamentMessage.format(message.chat.first_name, args[0],
+                                                                            contribution),
+                                    parse_mode="HTML")
+
+        self.__tournaments.removeLine(lineData=args[0])  # удаление турнира из базы данных
+
     # --------------------------------------------------------- #
 
     # ---------- Хэндлеры бота SchetczeBot: CallbackQuery --------- #
-    async def __contributionCallbackHandler(self, call: CallbackQuery) -> None:
+    async def __participationCallbackHandler(self, call: CallbackQuery) -> None:
+        """
+        Метод-хэндлер: обработка кнопок типа participation
+        :param call: aiogram.types.CallbackQuery
+        :return: NoneType
+        """
+
+        tournamentDatetime = call.data[14::]  # получение идентификатора турнира
+        tournament = self.__tournaments.getDataFromLine(lineData=tournamentDatetime)  # получение всех данных о турнире
+        # Проверка: открыта ли регистрация на турнир (0 - закрыта) ↓
+        if tournament[3] == 0:
+            # Отправка пользователю сообщения participationExceptionMessage_1 ↓
+            await self.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
+                                         text=Text.participationExceptionMessage_1.format(call.message.chat.first_name),
+                                         parse_mode="HTML")
+            return
+
+        # Назначение переменных, отвечающих за баланс пользователя и размер взноса на турнир ↓
+        balance = int(self.__users.getDataFromField(lineData=call.message.chat.id, columnName=self.__users.BALANCE))
+        contribution = int(tournament[3])
+
+        # Если баланс игрока больше взноса на турнир
+        if balance >= contribution:
+            # Добавление пользователя турнир и списание взноса, отправка сообщения successfulParticipationMessage ↓
+            self.__tournaments.addMember(datetime=tournamentDatetime, telegramID=call.message.chat.id)
+            await self.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
+                                         text=Text.successfulParticipationMessage.format(call.message.chat.first_name,
+                                                                                         contribution),
+                                         parse_mode="HTML")
+            self.__users.updateField(lineData=call.message.chat.id, columnName=self.__users.BALANCE,
+                                     field=balance - contribution)
+
+            # Отправка админу сообщение participationNoticeMessage ↓
+            adminChat = await self.get_chat(chat_id=Text.admins_id[0])
+            await self.send_message(chat_id=adminChat.id,
+                                    text=Text.participationNoticeMessage.format(adminChat.first_name,
+                                                                                tournamentDatetime,
+                                                                                call.message.from_user.url),
+                                    parse_mode="HTML")
+
+            # Если турнир принял максимальное количество игроков, то поменять значение столбца Participation на 0 ↓
+            if len(self.__tournaments.getMembers(datetime=tournamentDatetime)) == int(tournament[2]):
+                # Закрытие регистрации на турнир ↓
+                self.__tournaments.updateField(lineData=tournamentDatetime,
+                                               columnName=self.__tournaments.PARTICIPATION, field=0)
+                # Отправка админу сообщению о готовности ↓
+                await self.send_message(chat_id=adminChat.id,
+                                        text=Text.maxUserCountMessage.format(adminChat.first_name), parse_mode="HTML")
+
+        else:
+            # Отправка пользователю сообщения participationExceptionMessage_0 ↓
+            await self.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
+                                         text=Text.participationExceptionMessage_0.format(call.message.chat.first_name,
+                                                                                          contribution - balance),
+                                         parse_mode="HTML", reply_markup=call.message.reply_markup)
+
+    async def __registrationCallbackHandler(self, call: CallbackQuery, state: FSMContext) -> None:
+        """
+        Метод-хэндлер: обработка кнопки registration
+        :param call: aiogram.types.CallbackQuery
+        :param state: aiogram.fsm.context.FSMContext
+        :return: NoneType
+        """
+
+        # Отправка пользователю сообщение registrationMessage ↓
+        await self.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
+                                     text=Text.registrationMessage.format(call.message.chat.first_name),
+                                     parse_mode="HTML")
+
+        await state.set_state(States.registrationState)  # активация registrationState
+
+        # Передача message_id для дальнейшего изменения ↓
+        await state.update_data({"message_id": call.message.message_id})
+
+    async def __profileCallbackHandler(self, call: CallbackQuery) -> None:
+        """
+        Метод-хэндлер: обработка кнопки profile
+        :param call: aiogram.types.CallbackQuery
+        :return: NoneType
+        """
+
+        userData = self.__users.getDataFromLine(lineData=call.message.chat.id)  # получение информации о пользователе
+        # Отправка сообщения profileMessage ↓
+        await self.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
+                                     text=Text.profileMessage.format(call.message.chat.first_name,
+                                                                     userData[2], userData[5],
+                                                                     userData[6], len(loads(str(userData[7])))),
+                                     parse_mode="HTML", reply_markup=Markup.profileMarkup)
+
+    async def __balanceIncreasingCallbackHandler(self, call: CallbackQuery) -> None:
         """
         Метод-хэндлер: обработка кнопки contribution
         :param call: aiogram.types.CallbackQuery
         :return: NoneType
         """
+
         # Ответ ↓
         await self.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
-                                     text=Text.contributionMessage.format(call.message.chat.first_name),
+                                     text=Text.balanceIncreasingMessage.format(call.message.chat.first_name),
                                      parse_mode="HTML", reply_markup=Markup.contributionMarkup)
 
     async def __contributionPaymentHandler(self, call: CallbackQuery) -> None:
@@ -231,31 +477,31 @@ class SchetczeBot(Bot):
         :return: NoneType
         """
 
-        contribution = int(call.data[8:]) * 100  # получение размера взноса из callback.data
+        value = int(call.data[8:]) * 100  # получение размера взноса из callback.data
 
         # Генерация объекта provider_data, который требует Ю-касса ↓
         receipt = {
             "receipt": {"items": [
                 {
-                    "description": Text.contributionInvoiceButton["label"],
+                    "description": Text.balanceInvoiceButton["label"],
                     "quantity": "1.00",
-                    "amount": {"value": format(contribution / 100, ".2f"), "currency": Text.contributionInvoiceButton["currency"]},
+                    "amount": {"value": format(value / 100, ".2f"),
+                               "currency": Text.balanceInvoiceButton["currency"]},
                     "vat_code": 1
                 }
             ]}
         }
         # Удаление прошлого сообщения; отправка запроса на оплату ↓
         await self.delete_message(chat_id=call.message.chat.id, message_id=call.message.message_id)
-        await self.send_invoice(chat_id=call.message.chat.id, title=Text.contributionInvoiceButton["title"],
-                                description=Text.contributionInvoiceButton["description"],
-                                payload=Text.contributionInvoiceButton["payload"],
+        await self.send_invoice(chat_id=call.message.chat.id, title=Text.balanceInvoiceButton["title"].format(
+            self.__users.getDataFromField(lineData=call.message.chat.id, columnName=self.__users.BS_USERNAME)),
+                                description=Text.balanceInvoiceButton["description"],
+                                payload=Text.balanceInvoiceButton["payload"],
                                 provider_token=self.__auth.getPaymentToken(),
-                                currency=Text.contributionInvoiceButton["currency"], need_email=True,
+                                currency=Text.balanceInvoiceButton["currency"], need_email=True,
                                 need_phone_number=True, send_email_to_provider=True, send_phone_number_to_provider=True,
-                                prices=[LabeledPrice(label=Text.contributionInvoiceButton["label"],
-                                                     amount=contribution)],
-                                provider_data=dumps(receipt))
-        # provider_data=)
+                                prices=[LabeledPrice(label=Text.balanceInvoiceButton["label"],
+                                                     amount=value)], provider_data=dumps(receipt))
 
     async def __responseCallbackHandler(self, call: CallbackQuery, state: FSMContext) -> None:
         """
@@ -281,7 +527,7 @@ class SchetczeBot(Bot):
         :return: NoneType
         """
         await self.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
-                                     text=Text.startMessage.format(call.message.chat.first_name),
+                                     text=Text.startMessage_1.format(call.message.chat.first_name),
                                      parse_mode="HTML", reply_markup=Markup.mainMarkup)
 
     async def __infoCallbackHandler(self, call: CallbackQuery) -> None:
@@ -307,16 +553,17 @@ class SchetczeBot(Bot):
         :return: NoneType
         """
 
+        # Переадресация на меню регистрации пользователя ↓
         await self.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
-                                     text=Text.unregisteredMessage.format(call.message.chat.first_name),
-                                     parse_mode="HTML")
+                                     text=Text.startMessage_0.format(call.message.chat.first_name), parse_mode="HTML",
+                                     reply_markup=Markup.registrationMarkup)
 
     # ------------------------------------------------------------- #
 
     # ---------- Хэндлеры бота SchetczeBot: PreCheckoutQuery ---------- #
-    async def __contributionPreCheckoutHandler(self, checkout: PreCheckoutQuery) -> None:
+    async def __balancePreCheckoutHandler(self, checkout: PreCheckoutQuery) -> None:
         """
-        Метод-хэндлер: обработка товара contributionPayment
+        Метод-хэндлер: обработка товара balance
         :param checkout: aiogram.types.pre_checkout_query.PreCheckoutQuery
         :return: NoneType
         """
@@ -327,21 +574,21 @@ class SchetczeBot(Bot):
     # ----------------------------------------------------------------- #
 
     # --------- Хэндлеры бота SchetczeBot: SuccessfulPayment ---------- #
-    async def __contributionSuccessfulPaymentHandler(self, message: Message) -> None:
+    async def __balanceSuccessfulPaymentHandler(self, message: Message) -> None:
         """
-        Метод-хэндлер: обработка успешной оплаты contributionPayment
+        Метод-хэндлер: обработка успешной оплаты balance
         :param message: aiogram.types.Message
         :return: NoneType
         """
-        # Получение значения ячейки Contribution пользователя ↓
-        filed = int(self.__users.getDataFromField(lineData=message.chat.id, columnName=self.__users.CONTRIBUTION))
+        # Получение значения ячейки Balance пользователя ↓
+        filed = int(self.__users.getDataFromField(lineData=message.chat.id, columnName=self.__users.BALANCE))
 
         # Заполнение|Обновление ячеек Email, Phone_number, Contribution пользователя ↓
         self.__users.updateField(lineData=message.chat.id, columnName=self.__users.EMAIL,
                                  field=message.successful_payment.order_info.email)
         self.__users.updateField(lineData=message.chat.id, columnName=self.__users.PHONE_NUMBER,
                                  field=message.successful_payment.order_info.phone_number)
-        self.__users.updateField(lineData=message.chat.id, columnName=self.__users.CONTRIBUTION,
+        self.__users.updateField(lineData=message.chat.id, columnName=self.__users.BALANCE,
                                  field=filed + int(message.successful_payment.total_amount // 100))
 
         # Генерация и отправка благодарственного сообщения ↓
@@ -349,15 +596,60 @@ class SchetczeBot(Bot):
         await self.send_message(chat_id=message.chat.id, text=replyMessage, parse_mode="HTML")
 
         # Отправка главного меню ↓
-        await self.send_message(chat_id=message.chat.id, text=Text.startMessage.format(message.chat.first_name),
+        await self.send_message(chat_id=message.chat.id, text=Text.startMessage_1.format(message.chat.first_name),
                                 parse_mode="HTML", reply_markup=Markup.mainMarkup)
         self.__logger.info(Text.successfulPaymentLog.format(message.chat.first_name,
-                                                            Text.contributionInvoiceButton["payload"],
+                                                            Text.balanceInvoiceButton["payload"],
                                                             int(message.successful_payment.total_amount // 100)))
-
     # ----------------------------------------------------------------- #
 
     # ---------- Хэндлер бота SchetczeBot: Message ---------- #
+    async def __registrationMessageHandler(self, message: Message, state: FSMContext):
+        stateData = await state.get_data()  # получение stateData (cм __registrationCallbackHandler)
+        if ":" in message.text:
+            oldData = self.__users.getDataFromLine(lineData=message.chat.id)
+            BSData = message.text.split(":")
+            if oldData is None:
+                # Проверка: существует ли пользователь с таким же ником или кодом ↓
+                if (BSData[0] in self.__users.getDataFromColumn(columnName=self.__users.BS_ID)
+                        or BSData[1] in self.__users.getDataFromColumn(columnName=self.__users.BS_USERNAME)):
+                    await self.send_message(chat_id=message.chat.id,
+                                            text=Text.registrationExceptionMessage_0.format(message.chat.first_name),
+                                            parse_mode="HTML", reply_markup=Markup.registrationMarkup)
+                    return
+                # Регистрация пользователя ↓
+                self.__users.fillingTheTable(telegramID=message.chat.id, telegramUsername=message.chat.username,
+                                             balance=0, email="", phoneNumber="",
+                                             BSID=BSData[0], BSUsername=BSData[1], responses="[]")
+            else:
+                # Проверка: существует ли пользователь с таким же ником или кодом ↓
+                if (BSData[0] in self.__users.getDataFromColumn(columnName=self.__users.BS_ID)
+                        or BSData[1] in self.__users.getDataFromColumn(columnName=self.__users.BS_USERNAME)):
+                    await self.send_message(chat_id=message.chat.id,
+                                            text=Text.registrationExceptionMessage_1.format(message.chat.first_name),
+                                            parse_mode="HTML", reply_markup=Markup.mainMarkup)
+                    return
+                # Перерегистрация пользователя ↓
+                self.__users.removeLine(lineData=message.chat.id)
+                self.__users.fillingTheTable(telegramID=message.chat.id, telegramUsername=message.chat.username,
+                                             balance=int(oldData[2]), email=str(oldData[3]),
+                                             phoneNumber=str(oldData[4]),
+                                             BSID=BSData[0], BSUsername=BSData[1], responses=str(oldData[7]))
+
+            # Удаление прошлого сообщения и отправка successfulRegistrationMessage ↓
+            await self.delete_message(chat_id=message.chat.id, message_id=stateData["message_id"])
+            await self.send_message(chat_id=message.chat.id,
+                                    text=Text.successfulRegistrationMessage.format(message.chat.first_name),
+                                    parse_mode="HTML", reply_markup=Markup.mainMarkup)
+            return
+
+        # Удаление прошлого сообщения и отправка RegistrationExceptionMessage ↓
+        await self.delete_message(chat_id=message.chat.id, message_id=stateData["message_id"])
+        await self.send_message(chat_id=message.chat.id,
+                                text=Text.registrationExceptionMessage_0.format(message.chat.first_name),
+                                parse_mode="HTML", reply_markup=Markup.registrationMarkup)
+
+        await state.clear()
 
     async def __responseMessageHandler(self, message: Message, state: FSMContext):
         if len(message.text) > 50:
@@ -378,9 +670,9 @@ class SchetczeBot(Bot):
                                 text=Text.responseCommitMessage.format(message.chat.first_name),
                                 parse_mode="HTML")
         await self.send_message(chat_id=message.chat.id,
-                                text=Text.startMessage.format(message.chat.first_name),
+                                text=Text.startMessage_1.format(message.chat.first_name),
                                 parse_mode="HTML", reply_markup=Markup.mainMarkup)
-        await state.clear()  # очищение State
+        await state.clear()
 
     async def __unknownMessageHandler(self, message: Message) -> None:
         # Ответ ↓
@@ -405,7 +697,9 @@ class SchetczeBot(Bot):
         :param message: aiogram.types.Message
         :return: NoneType
         """
+
+        # Переадресация на меню регистрации пользователя ↓
         await self.send_message(chat_id=message.chat.id,
-                                text=Text.unregisteredMessage.format(message.chat.first_name),
-                                parse_mode="HTML")
+                                text=Text.startMessage_0.format(message.chat.first_name), parse_mode="HTML",
+                                reply_markup=Markup.registrationMarkup)
     # ------------------------------------------------------- #
